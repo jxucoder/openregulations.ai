@@ -130,16 +130,6 @@ The repo includes workflows for:
 
 See `.github/workflows/` for configuration.
 
-### Modal (Heavy Compute)
-
-```bash
-# Deploy to Modal
-modal deploy modal_app.py
-
-# Run manually
-modal run modal_app.py --docket-id NHTSA-2025-0491
-```
-
 ## Contributing
 
 Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details on:

@@ -19,9 +19,6 @@ dev = [
     "pytest>=7.0.0",
     "ruff>=0.1.0",
 ]
-modal = [
-    "modal>=0.56.0",
-]
 
 [project.scripts]
 sync = "src.jobs.sync:main"
