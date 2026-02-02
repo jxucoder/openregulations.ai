@@ -1,0 +1,159 @@
+name: Daily Jobs
+
+on:
+  schedule:
+    # Sync: Every 6 hours
+    - cron: '0 */6 * * *'
+    # Analysis: Daily at 7am UTC (after sync)
+    - cron: '0 7 * * *'
+  
+  workflow_dispatch:
+    inputs:
+      job:
+        description: 'Job to run'
+        required: true
+        type: choice
+        options:
+          - sync
+          - analyze
+          - embed
+          - report
+          - all
+      docket_id:
+        description: 'Specific docket ID (optional)'
+        required: false
+
+jobs:
+  # ============================================
+  # SYNC JOB - Fetch from Regulations.gov
+  # Runs every 6 hours
+  # ============================================
+  sync:
+    if: github.event.schedule == '0 */6 * * *' || github.event.inputs.job == 'sync' || github.event.inputs.job == 'all'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: pip install requests supabase python-dotenv
+      
+      - name: Run sync
+        env:
+          REGULATIONS_API_KEY: ${{ secrets.REGULATIONS_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          if [ -n "${{ github.event.inputs.docket_id }}" ]; then
+            python -m src.jobs.sync --docket-id "${{ github.event.inputs.docket_id }}"
+          else
+            python -m src.jobs.sync --max-dockets 10 --max-comments 500
+          fi
+      
+      - name: Summary
+        run: |
+          echo "## Sync Complete" >> $GITHUB_STEP_SUMMARY
+          echo "Time: $(date -u)" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================
+  # ANALYZE JOB - Run Claude analysis
+  # Runs daily at 7am UTC
+  # ============================================
+  analyze:
+    if: github.event.schedule == '0 7 * * *' || github.event.inputs.job == 'analyze' || github.event.inputs.job == 'all'
+    runs-on: ubuntu-latest
+    needs: [sync]
+    # Run even if sync was skipped (for manual triggers)
+    if: always() && (github.event.schedule == '0 7 * * *' || github.event.inputs.job == 'analyze' || github.event.inputs.job == 'all')
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: pip install requests supabase anthropic python-dotenv
+      
+      - name: Run analysis
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          if [ -n "${{ github.event.inputs.docket_id }}" ]; then
+            python -m src.jobs.analyze --docket-id "${{ github.event.inputs.docket_id }}"
+          else
+            python -m src.jobs.analyze --all --max-dockets 3
+          fi
+      
+      - name: Summary
+        run: |
+          echo "## Analysis Complete" >> $GITHUB_STEP_SUMMARY
+          echo "Time: $(date -u)" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================
+  # EMBED JOB - Generate embeddings
+  # Runs after analysis
+  # ============================================
+  embed:
+    if: github.event.inputs.job == 'embed' || github.event.inputs.job == 'all'
+    runs-on: ubuntu-latest
+    needs: [analyze]
+    if: always() && (github.event.inputs.job == 'embed' || github.event.inputs.job == 'all')
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: pip install requests supabase openai python-dotenv
+      
+      - name: Run embeddings
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          if [ -n "${{ github.event.inputs.docket_id }}" ]; then
+            python -m src.jobs.embed --docket-id "${{ github.event.inputs.docket_id }}"
+          else
+            python -m src.jobs.embed --all --max-dockets 5
+          fi
+
+  # ============================================
+  # REPORT JOB - Generate daily report
+  # ============================================
+  report:
+    if: github.event.schedule == '0 7 * * *' || github.event.inputs.job == 'report' || github.event.inputs.job == 'all'
+    runs-on: ubuntu-latest
+    needs: [analyze]
+    if: always() && (github.event.schedule == '0 7 * * *' || github.event.inputs.job == 'report' || github.event.inputs.job == 'all')
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: pip install supabase python-dotenv
+      
+      - name: Generate report
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python -m src.jobs.report

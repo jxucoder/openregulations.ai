@@ -1,0 +1,72 @@
+name: Daily Comment Analysis
+
+on:
+  schedule:
+    # Run daily at 6am UTC
+    - cron: '0 6 * * *'
+  
+  # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      docket_id:
+        description: 'Docket ID to analyze'
+        required: false
+        default: 'NHTSA-2025-0491'
+      limit:
+        description: 'Max comments to analyze'
+        required: false
+        default: '100'
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install uv
+        run: pip install uv
+      
+      - name: Install dependencies
+        run: |
+          uv venv
+          source .venv/bin/activate
+          uv pip install requests anthropic
+      
+      - name: Run analysis
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          REGULATIONS_API_KEY: ${{ secrets.REGULATIONS_API_KEY }}
+        run: |
+          source .venv/bin/activate
+          python src/agents/comment_analyzer.py \
+            --docket ${{ github.event.inputs.docket_id || 'NHTSA-2025-0491' }} \
+            --limit ${{ github.event.inputs.limit || '100' }} \
+            --output analysis-${{ github.run_id }}.json
+      
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: analysis-${{ github.run_id }}
+          path: analysis-*.json
+          retention-days: 30
+      
+      - name: Print summary
+        run: |
+          echo "## Analysis Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          cat analysis-*.json | python -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          print(f\"**Docket:** {data['docket_id']}\")
+          print(f\"**Comments:** {data['total_comments']}\")
+          print(f\"**Form Letters:** {data['form_letter_percentage']:.0f}%\")
+          print(f\"**Sentiment:** {data['sentiment']}\")
+          print(f\"\n**Summary:**\n{data['executive_summary']}\")
+          " >> $GITHUB_STEP_SUMMARY

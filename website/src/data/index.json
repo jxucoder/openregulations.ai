@@ -1,0 +1,38 @@
+{
+  "updated_at": "2026-02-01T06:00:00Z",
+  "dockets": [
+    {
+      "id": "NHTSA-2025-0491",
+      "title": "Corporate Average Fuel Economy Standards",
+      "agency": "NHTSA",
+      "total_comments": 4957,
+      "sentiment_oppose": 62,
+      "comment_period_end": "2026-02-15",
+      "analyzed_at": "2026-02-01T06:00:00Z",
+      "is_trending": true,
+      "tags": ["environment", "automotive"]
+    },
+    {
+      "id": "FAA-2025-1908",
+      "title": "Remote Identification of Unmanned Aircraft",
+      "agency": "FAA",
+      "total_comments": 3129,
+      "sentiment_oppose": 45,
+      "comment_period_end": "2026-02-28",
+      "analyzed_at": "2026-02-01T06:00:00Z",
+      "is_trending": false,
+      "tags": ["technology", "aviation"]
+    },
+    {
+      "id": "FDA-2023-P-3942",
+      "title": "Gluten-Free Labeling of Fermented Foods",
+      "agency": "FDA",
+      "total_comments": 1855,
+      "sentiment_oppose": 20,
+      "comment_period_end": "2026-03-01",
+      "analyzed_at": "2026-02-01T06:00:00Z",
+      "is_trending": false,
+      "tags": ["health", "food"]
+    }
+  ]
+}

@@ -1,0 +1,77 @@
+# Agent Configuration
+# Edit this file to change agent behavior - no code changes needed
+
+name: "OpenRegulations Analyzer"
+version: "0.1.0"
+
+# Model settings
+model:
+  provider: "anthropic"
+  name: "claude-sonnet-4-20250514"
+  max_tokens: 4096
+  temperature: 0
+
+# System prompt - the agent's core personality/instructions
+system_prompt: |
+  You are an autonomous regulatory analysis agent for OpenRegulations.ai.
+  
+  ## Your Mission
+  Analyze public comments on federal regulations to surface insights that 
+  humans would miss at scale.
+  
+  ## Your Capabilities
+  You have tools to:
+  - Fetch data from Regulations.gov API
+  - Query and write to the database
+  - Run Python analysis code
+  - Send alerts about important findings
+  
+  ## Your Process
+  When given a task:
+  1. CHECK: What data already exists in the database?
+  2. FETCH: Get new data if needed (be efficient, don't re-fetch)
+  3. ANALYZE: Use appropriate tools for the analysis
+  4. STORE: Save results to database for future use
+  5. ALERT: Notify if anything unusual (>70% form letters, sudden spikes, etc.)
+  
+  ## Your Style
+  - Be thorough but efficient
+  - Explain your reasoning briefly
+  - When uncertain, check the database first
+  - Prefer using existing analysis over re-running
+  
+  ## Alert Thresholds
+  - Form letter rate > 70%: warning
+  - Comment velocity > 500/day: info
+  - Sentiment > 90% one-sided: warning
+  - New docket with 1000+ comments: info
+
+# Available tools
+tools:
+  - name: fetch_comments
+    enabled: true
+    
+  - name: query_database
+    enabled: true
+    read_only: true  # Safety: only SELECT allowed
+    
+  - name: save_analysis
+    enabled: true
+    
+  - name: run_python
+    enabled: true
+    sandboxed: true
+    timeout_seconds: 30
+    
+  - name: send_alert
+    enabled: true
+    channels: ["slack", "email"]
+
+# Guardrails
+safety:
+  max_iterations: 15
+  max_tokens_per_run: 50000
+  require_confirmation_for:
+    - "delete"
+    - "drop"
+    - "truncate"

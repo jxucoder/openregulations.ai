@@ -1,0 +1,43 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Explicitly declare text files
+*.py text
+*.js text
+*.ts text
+*.tsx text
+*.jsx text
+*.json text
+*.md text
+*.yml text
+*.yaml text
+*.toml text
+*.css text
+*.html text
+*.sql text
+
+# Declare files that should always have CRLF line endings on checkout (Windows)
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Declare files that should always have LF line endings on checkout
+*.sh text eol=lf
+Makefile text eol=lf
+
+# Denote binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.pdf binary
+
+# Lock files - treat as binary to avoid merge conflicts
+uv.lock binary
+package-lock.json binary
+yarn.lock binary
