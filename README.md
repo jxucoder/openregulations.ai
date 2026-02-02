@@ -158,5 +158,6 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 ## Acknowledgments
 
 - Data from [Regulations.gov](https://www.regulations.gov) via their public API
-- Analysis powered by [Claude](https://www.anthropic.com/claude) from Anthropic
-- Inspired by the need for more transparent, accessible government
+- AI models from [Anthropic](https://www.anthropic.com) and [OpenAI](https://openai.com)
+- All prompts are open source and available in this repository
+- This is a technical learning project for exploring AI/LLM applications
