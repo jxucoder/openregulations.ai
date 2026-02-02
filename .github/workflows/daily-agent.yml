@@ -65,11 +65,10 @@ jobs:
   # Runs daily at 7am UTC
   # ============================================
   analyze:
-    if: github.event.schedule == '0 7 * * *' || github.event.inputs.job == 'analyze' || github.event.inputs.job == 'all'
-    runs-on: ubuntu-latest
-    needs: [sync]
     # Run even if sync was skipped (for manual triggers)
     if: always() && (github.event.schedule == '0 7 * * *' || github.event.inputs.job == 'analyze' || github.event.inputs.job == 'all')
+    runs-on: ubuntu-latest
+    needs: [sync]
     
     steps:
       - uses: actions/checkout@v4
@@ -104,10 +103,9 @@ jobs:
   # Runs after analysis
   # ============================================
   embed:
-    if: github.event.inputs.job == 'embed' || github.event.inputs.job == 'all'
+    if: always() && (github.event.inputs.job == 'embed' || github.event.inputs.job == 'all')
     runs-on: ubuntu-latest
     needs: [analyze]
-    if: always() && (github.event.inputs.job == 'embed' || github.event.inputs.job == 'all')
     
     steps:
       - uses: actions/checkout@v4
@@ -136,10 +134,9 @@ jobs:
   # REPORT JOB - Generate daily report
   # ============================================
   report:
-    if: github.event.schedule == '0 7 * * *' || github.event.inputs.job == 'report' || github.event.inputs.job == 'all'
+    if: always() && (github.event.schedule == '0 7 * * *' || github.event.inputs.job == 'report' || github.event.inputs.job == 'all')
     runs-on: ubuntu-latest
     needs: [analyze]
-    if: always() && (github.event.schedule == '0 7 * * *' || github.event.inputs.job == 'report' || github.event.inputs.job == 'all')
     
     steps:
       - uses: actions/checkout@v4
