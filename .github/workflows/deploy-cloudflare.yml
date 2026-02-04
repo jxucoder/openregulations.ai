@@ -30,6 +30,8 @@ jobs:
       
       - name: Build website
         working-directory: website
+        env:
+          VITE_WORKER_URL: https://openregulations-api.jxucoder.workers.dev
         run: npm run build
       
       - name: Deploy to Cloudflare Pages
