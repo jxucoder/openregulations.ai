@@ -12,6 +12,7 @@ dependencies = [
     "anthropic>=0.18.0",
     "openai>=1.12.0",
     "supabase>=2.3.0",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
@@ -25,6 +26,8 @@ sync = "src.jobs.sync:main"
 analyze = "src.jobs.analyze:main"
 embed = "src.jobs.embed:main"
 report = "src.jobs.report:main"
+agent = "src.autonomous.agent:main"
+openreg = "run_agent:main"
 
 [build-system]
 requires = ["hatchling"]
