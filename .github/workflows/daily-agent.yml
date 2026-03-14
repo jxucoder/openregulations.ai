@@ -1,156 +1,211 @@
-name: Daily Jobs
+name: Autonomous Agent
 
 on:
   schedule:
-    # Sync: Every 6 hours
-    - cron: '0 */6 * * *'
-    # Analysis: Daily at 7am UTC (after sync)
-    - cron: '0 7 * * *'
-  
+    # Full autonomous pipeline: twice daily
+    - cron: '0 6 * * *'   # 6am UTC
+    - cron: '0 18 * * *'  # 6pm UTC
+
+    # Sync-only: every 6 hours (off-cycle from full runs)
+    - cron: '0 0 * * *'   # midnight UTC
+    - cron: '0 12 * * *'  # noon UTC
+
   workflow_dispatch:
     inputs:
-      job:
-        description: 'Job to run'
+      mode:
+        description: 'Execution mode'
         required: true
         type: choice
         options:
-          - sync
-          - analyze
-          - embed
-          - report
-          - all
+          - agent        # Full autonomous agent (decides what to do)
+          - direct-all   # Run all jobs sequentially (no LLM orchestration)
+          - direct-sync  # Sync only
+          - direct-analyze
+          - direct-embed
+          - direct-report
+          - pipeline     # State machine pipeline for a docket
       docket_id:
-        description: 'Specific docket ID (optional)'
+        description: 'Specific docket ID (optional, for pipeline/direct modes)'
         required: false
+
+env:
+  REGULATIONS_API_KEY: ${{ secrets.REGULATIONS_API_KEY }}
+  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+  SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+  SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
 jobs:
   # ============================================
-  # SYNC JOB - Fetch from Regulations.gov
-  # Runs every 6 hours
+  # AUTONOMOUS AGENT - Full pipeline
+  # The agent decides what to sync, analyze, embed, and report
   # ============================================
-  sync:
-    if: github.event.schedule == '0 */6 * * *' || github.event.inputs.job == 'sync' || github.event.inputs.job == 'all'
+  agent:
+    if: >-
+      github.event.schedule == '0 6 * * *' ||
+      github.event.schedule == '0 18 * * *' ||
+      github.event.inputs.mode == 'agent'
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 30
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
       - name: Install dependencies
-        run: pip install requests supabase python-dotenv
-      
-      - name: Run sync
-        env:
-          REGULATIONS_API_KEY: ${{ secrets.REGULATIONS_API_KEY }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: uv sync
+
+      - name: Run autonomous agent
         run: |
           if [ -n "${{ github.event.inputs.docket_id }}" ]; then
-            python -m src.jobs.sync --docket-id "${{ github.event.inputs.docket_id }}"
+            uv run python run_agent.py --task analyze_docket --docket-id "${{ github.event.inputs.docket_id }}" -v
           else
-            python -m src.jobs.sync --max-dockets 10 --max-comments 500
+            uv run python run_agent.py --task full_pipeline -v
           fi
-      
+
       - name: Summary
+        if: always()
+        run: |
+          echo "## Autonomous Agent Run" >> $GITHUB_STEP_SUMMARY
+          echo "- **Time**: $(date -u)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Mode**: Agent (full pipeline)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================
+  # SYNC-ONLY - Lightweight data fetch
+  # Runs on off-cycle hours to keep data fresh
+  # ============================================
+  sync-only:
+    if: >-
+      github.event.schedule == '0 0 * * *' ||
+      github.event.schedule == '0 12 * * *' ||
+      github.event.inputs.mode == 'direct-sync'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run sync
+        run: |
+          if [ -n "${{ github.event.inputs.docket_id }}" ]; then
+            uv run python run_agent.py --direct sync --docket-id "${{ github.event.inputs.docket_id }}"
+          else
+            uv run python run_agent.py --direct sync
+          fi
+
+      - name: Summary
+        if: always()
         run: |
           echo "## Sync Complete" >> $GITHUB_STEP_SUMMARY
-          echo "Time: $(date -u)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Time**: $(date -u)" >> $GITHUB_STEP_SUMMARY
 
   # ============================================
-  # ANALYZE JOB - Run Claude analysis
-  # Runs daily at 7am UTC
+  # DIRECT JOBS - Run specific jobs without agent
   # ============================================
-  analyze:
-    # Run even if sync was skipped (for manual triggers)
-    if: always() && (github.event.schedule == '0 7 * * *' || github.event.inputs.job == 'analyze' || github.event.inputs.job == 'all')
+  direct:
+    if: >-
+      github.event.inputs.mode == 'direct-all' ||
+      github.event.inputs.mode == 'direct-analyze' ||
+      github.event.inputs.mode == 'direct-embed' ||
+      github.event.inputs.mode == 'direct-report'
     runs-on: ubuntu-latest
-    needs: [sync]
-    
+    timeout-minutes: 30
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
       - name: Install dependencies
-        run: pip install requests supabase anthropic python-dotenv
-      
-      - name: Run analysis
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: uv sync
+
+      - name: Determine job
+        id: job
         run: |
+          MODE="${{ github.event.inputs.mode }}"
+          case "$MODE" in
+            direct-all) echo "job=all" >> $GITHUB_OUTPUT ;;
+            direct-analyze) echo "job=analyze" >> $GITHUB_OUTPUT ;;
+            direct-embed) echo "job=embed" >> $GITHUB_OUTPUT ;;
+            direct-report) echo "job=report" >> $GITHUB_OUTPUT ;;
+          esac
+
+      - name: Run job
+        run: |
+          JOB="${{ steps.job.outputs.job }}"
           if [ -n "${{ github.event.inputs.docket_id }}" ]; then
-            python -m src.jobs.analyze --docket-id "${{ github.event.inputs.docket_id }}"
+            uv run python run_agent.py --direct "$JOB" --docket-id "${{ github.event.inputs.docket_id }}"
           else
-            python -m src.jobs.analyze --all --max-dockets 3
+            uv run python run_agent.py --direct "$JOB"
           fi
-      
+
       - name: Summary
+        if: always()
         run: |
-          echo "## Analysis Complete" >> $GITHUB_STEP_SUMMARY
-          echo "Time: $(date -u)" >> $GITHUB_STEP_SUMMARY
+          echo "## Direct Job: ${{ steps.job.outputs.job }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Time**: $(date -u)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
 
   # ============================================
-  # EMBED JOB - Generate embeddings
-  # Runs after analysis
+  # PIPELINE - State machine for a specific docket
   # ============================================
-  embed:
-    if: always() && (github.event.inputs.job == 'embed' || github.event.inputs.job == 'all')
+  pipeline:
+    if: github.event.inputs.mode == 'pipeline'
     runs-on: ubuntu-latest
-    needs: [analyze]
-    
+    timeout-minutes: 30
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
       - name: Install dependencies
-        run: pip install requests supabase openai python-dotenv
-      
-      - name: Run embeddings
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: uv sync
+
+      - name: Run pipeline
         run: |
-          if [ -n "${{ github.event.inputs.docket_id }}" ]; then
-            python -m src.jobs.embed --docket-id "${{ github.event.inputs.docket_id }}"
-          else
-            python -m src.jobs.embed --all --max-dockets 5
+          DOCKET="${{ github.event.inputs.docket_id }}"
+          if [ -z "$DOCKET" ]; then
+            echo "Error: pipeline mode requires a docket_id"
+            exit 1
           fi
+          uv run python run_agent.py --pipeline --docket-id "$DOCKET" -v
 
-  # ============================================
-  # REPORT JOB - Generate daily report
-  # ============================================
-  report:
-    if: always() && (github.event.schedule == '0 7 * * *' || github.event.inputs.job == 'report' || github.event.inputs.job == 'all')
-    runs-on: ubuntu-latest
-    needs: [analyze]
-    
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      
-      - name: Install dependencies
-        run: pip install supabase python-dotenv
-      
-      - name: Generate report
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: python -m src.jobs.report
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Pipeline: ${{ github.event.inputs.docket_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Time**: $(date -u)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
