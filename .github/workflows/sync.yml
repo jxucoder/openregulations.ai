@@ -1,0 +1,66 @@
+name: Daily Sync
+
+on:
+  schedule:
+    - cron: '0 7 * * *'  # Daily at 7am UTC
+
+  workflow_dispatch:
+    inputs:
+      docket_id:
+        description: 'Specific docket ID to sync (leave empty for all active)'
+        required: false
+      max_dockets:
+        description: 'Max dockets to sync (default 10)'
+        required: false
+        default: '10'
+      max_comments:
+        description: 'Max new comments per docket (default 500)'
+        required: false
+        default: '500'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Sync comments from Regulations.gov
+        env:
+          REGULATIONS_API_KEY: ${{ secrets.REGULATIONS_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          if [ -n "${{ github.event.inputs.docket_id }}" ]; then
+            uv run python -m src.jobs.sync \
+              --docket-id "${{ github.event.inputs.docket_id }}" \
+              --max-comments "${{ github.event.inputs.max_comments || '500' }}"
+          else
+            uv run python -m src.jobs.sync \
+              --max-dockets "${{ github.event.inputs.max_dockets || '10' }}" \
+              --max-comments "${{ github.event.inputs.max_comments || '500' }}"
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Sync Results" >> $GITHUB_STEP_SUMMARY
+          echo "- **Time**: $(date -u)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          if [ -n "${{ github.event.inputs.docket_id }}" ]; then
+            echo "- **Docket**: ${{ github.event.inputs.docket_id }}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Max dockets**: ${{ github.event.inputs.max_dockets || '10' }}" >> $GITHUB_STEP_SUMMARY
+          fi

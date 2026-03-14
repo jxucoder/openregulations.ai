@@ -1,0 +1,76 @@
+name: Claude Comment Analysis
+
+on:
+  schedule:
+    - cron: '0 8 * * *'  # Daily at 8am UTC (after sync at 7am)
+
+  workflow_dispatch:
+    inputs:
+      docket_id:
+        description: 'Specific docket ID to analyze (leave empty for all active)'
+        required: false
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  # Step 1: Export data from Supabase (synced by sync.yml workflow)
+  prepare-data:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Export comments to JSON
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          if [ -n "${{ github.event.inputs.docket_id }}" ]; then
+            uv run python -m src.jobs.export --docket-id "${{ github.event.inputs.docket_id }}"
+          else
+            uv run python -m src.jobs.export --all --max-dockets 5
+          fi
+
+      - name: Upload comment data
+        uses: actions/upload-artifact@v4
+        with:
+          name: comment-data
+          path: data/comments/
+          retention-days: 7
+
+  # Step 2: Claude analyzes the exported data and creates GitHub Issues
+  analyze:
+    needs: prepare-data
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download comment data
+        uses: actions/download-artifact@v4
+        with:
+          name: comment-data
+          path: data/comments/
+
+      - name: Run Claude Code analysis
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Read the analysis instructions in prompts/analyze-comments.md, then
+            analyze all comment data files in data/comments/.
+
+            Create one GitHub Issue per docket with a full analysis report.
+            Use the gh CLI to create issues (it's pre-installed).
+          claude_args: "--max-turns 15 --model claude-sonnet-4-20250514"
