@@ -157,13 +157,34 @@ async function handleStatus(request, env) {
 }
 
 async function handleDockets(request, env) {
-  const dockets = await supabaseQuery(env, 'dockets', {
-    select: 'id,title,agency,comment_count,comment_end_date',
-    order: 'comment_count.desc',
-    limit: '50',
-  });
+  const [dockets, analyses, reports] = await Promise.all([
+    supabaseQuery(env, 'dockets', {
+      select: 'id,title,agency,abstract,total_comments_at_sync,comment_end_date',
+      order: 'total_comments_at_sync.desc.nullslast',
+      limit: '50',
+    }),
+    supabaseQuery(env, 'analyses', {
+      select: 'docket_id,sentiment,total_comments',
+    }),
+    supabaseQuery(env, 'reports', {
+      select: 'docket_id',
+    }),
+  ]);
 
-  return jsonResponse({ dockets });
+  // Index analyses and reports by docket_id
+  const analysisMap = {};
+  for (const a of analyses) analysisMap[a.docket_id] = a;
+  const reportSet = new Set(reports.map(r => r.docket_id));
+
+  // Merge into docket objects
+  const merged = dockets.map(d => ({
+    ...d,
+    total_comments: d.total_comments_at_sync || 0,
+    sentiment: analysisMap[d.docket_id]?.sentiment || null,
+    has_report: reportSet.has(d.id),
+  }));
+
+  return jsonResponse({ dockets: merged });
 }
 
 async function handleDocket(docketId, env) {
