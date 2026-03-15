@@ -72,6 +72,7 @@ async function fetchDockets() {
   const [rawDockets, analyses, reports] = await Promise.all([
     supabaseFetch('dockets', {
       select: 'id,title,agency,abstract,total_comments_at_sync,comment_end_date',
+      filter: { total_comments_at_sync: 'gt.0' },
       order: 'total_comments_at_sync.desc.nullslast',
       limit: '50',
     }),
