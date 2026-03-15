@@ -132,7 +132,7 @@ class RegulationsGovAPI:
             headers=self.headers,
             params={
                 "filter[docketId]": docket_id,
-                "page[size]": 1
+                "page[size]": 5
             }
         )
         
@@ -294,17 +294,89 @@ def run_sync(max_dockets: int = 10, max_comments_per_docket: int = 500) -> List[
         raise
 
 
+def run_backfill(max_comments_per_docket: int = 10000) -> List[Dict]:
+    """
+    Backfill all dockets in the database that have missing comments.
+
+    Queries every docket, checks the API for total comments, and fetches
+    any that are missing from the database.
+
+    Args:
+        max_comments_per_docket: Max new comments to fetch per docket per run
+
+    Returns:
+        List of sync results (only dockets that needed backfilling)
+    """
+    api = RegulationsGovAPI()
+    db = get_client()
+
+    log_id = db.log_sync_start("run_backfill")
+
+    try:
+        # Get all dockets from DB
+        result = db.client.table("dockets").select("id").execute()
+        all_dockets = [row["id"] for row in result.data]
+        print(f"[BACKFILL] Found {len(all_dockets)} dockets in database")
+
+        # Check each for gaps
+        to_backfill = []
+        for docket_id in all_dockets:
+            db_count = db.client.table("comments").select(
+                "id", count="exact"
+            ).eq("docket_id", docket_id).execute().count
+
+            api_count = api.get_total_comments(docket_id)
+            gap = api_count - db_count
+
+            if gap > 0:
+                to_backfill.append((docket_id, db_count, api_count, gap))
+                print(f"[BACKFILL] {docket_id}: {db_count}/{api_count} (missing {gap})")
+
+        if not to_backfill:
+            print("[BACKFILL] All dockets are up to date")
+            db.log_sync_complete(log_id, records_fetched=0, records_created=0)
+            return []
+
+        # Sort by gap descending — biggest gaps first
+        to_backfill.sort(key=lambda x: -x[3])
+        print(f"\n[BACKFILL] Will backfill {len(to_backfill)} dockets")
+
+        results = []
+        for docket_id, db_count, api_count, gap in to_backfill:
+            print(f"\n[BACKFILL] === {docket_id} ({db_count}/{api_count}, gap={gap}) ===")
+            try:
+                result = sync_docket(docket_id, max_comments_per_docket)
+                results.append(result)
+            except Exception as e:
+                print(f"[BACKFILL] Failed: {e}")
+                results.append({"docket_id": docket_id, "status": "error", "error": str(e)})
+
+        total_fetched = sum(r.get("newly_fetched", 0) for r in results)
+        db.log_sync_complete(log_id, records_fetched=len(to_backfill), records_created=total_fetched)
+
+        print(f"\n[BACKFILL] Complete. Fetched {total_fetched} new comments across {len(to_backfill)} dockets")
+        return results
+
+    except Exception as e:
+        db.log_sync_error(log_id, str(e))
+        raise
+
+
 # CLI
 if __name__ == "__main__":
     import argparse
     
     parser = argparse.ArgumentParser(description="Sync from Regulations.gov")
     parser.add_argument("--docket-id", help="Sync specific docket")
+    parser.add_argument("--backfill", action="store_true", help="Backfill all dockets with missing comments")
     parser.add_argument("--max-dockets", type=int, default=10)
     parser.add_argument("--max-comments", type=int, default=500)
     args = parser.parse_args()
-    
-    if args.docket_id:
+
+    if args.backfill:
+        results = run_backfill(args.max_comments)
+        print(f"\nBackfilled {len(results)} dockets")
+    elif args.docket_id:
         result = sync_docket(args.docket_id, args.max_comments)
         print(f"\nResult: {result}")
     else:
