@@ -1,4 +1,4 @@
-name: Deploy to Cloudflare Pages
+name: Deploy to Cloudflare
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
     paths:
       - 'website/**'
       - '.github/workflows/deploy-cloudflare.yml'
-  
+
   workflow_dispatch:
 
 jobs:
@@ -32,8 +32,18 @@ jobs:
         working-directory: website
         env:
           VITE_WORKER_URL: https://openregulations-api.jxucoder.workers.dev
+          VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          VITE_SUPABASE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
         run: npm run build
-      
+
+      - name: Deploy Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy
+          workingDirectory: website/worker
+
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
