@@ -1,23 +1,20 @@
-name: Daily Sync
+name: Backfill Comments
 
 on:
-  schedule:
-    - cron: '0 7 * * *'  # Daily at 7am UTC
-
   workflow_dispatch:
     inputs:
       docket_id:
-        description: 'Specific docket ID to sync (leave empty for all active)'
+        description: 'Specific docket ID to backfill (leave empty for all with gaps)'
         required: false
       max_comments:
-        description: 'Max new comments per docket (default 500)'
+        description: 'Max comments to fetch per docket (default 10000)'
         required: false
-        default: '500'
+        default: '10000'
 
 jobs:
-  sync:
+  backfill:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
@@ -33,7 +30,7 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      - name: Sync comments from Regulations.gov
+      - name: Backfill comments
         env:
           REGULATIONS_API_KEY: ${{ secrets.REGULATIONS_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -42,15 +39,16 @@ jobs:
           if [ -n "${{ github.event.inputs.docket_id }}" ]; then
             uv run python -m src.jobs.sync \
               --docket-id "${{ github.event.inputs.docket_id }}" \
-              --max-comments "${{ github.event.inputs.max_comments || '500' }}"
+              --max-comments "${{ github.event.inputs.max_comments || '10000' }}"
           else
             uv run python -m src.jobs.sync \
-              --max-comments "${{ github.event.inputs.max_comments || '500' }}"
+              --backfill \
+              --max-comments "${{ github.event.inputs.max_comments || '10000' }}"
           fi
 
       - name: Summary
         if: always()
         run: |
-          echo "## Sync Results" >> $GITHUB_STEP_SUMMARY
+          echo "## Backfill Results" >> $GITHUB_STEP_SUMMARY
           echo "- **Time**: $(date -u)" >> $GITHUB_STEP_SUMMARY
           echo "- **Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY

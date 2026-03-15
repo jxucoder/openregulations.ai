@@ -23,35 +23,45 @@ from src.db import get_client, Docket, Comment
 
 
 class RegulationsGovAPI:
-    """Client for Regulations.gov API with rate limiting."""
-    
+    """Client for Regulations.gov API with rate limiting and retry."""
+
     BASE_URL = "https://api.regulations.gov/v4"
     RATE_LIMIT_DELAY = 0.4  # 400ms between requests
-    
+    MAX_RETRIES = 3
+
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or os.environ.get("REGULATIONS_API_KEY")
         if not self.api_key:
             raise ValueError("REGULATIONS_API_KEY not set")
-        
+
         self.headers = {"X-Api-Key": self.api_key}
         self._last_request = 0
-    
+
     def _rate_limit(self):
         """Ensure we don't exceed rate limits."""
         elapsed = time.time() - self._last_request
         if elapsed < self.RATE_LIMIT_DELAY:
             time.sleep(self.RATE_LIMIT_DELAY - elapsed)
         self._last_request = time.time()
+
+    def _get(self, url: str, params: Optional[dict] = None) -> requests.Response:
+        """GET with rate limiting and 429 retry with backoff."""
+        for attempt in range(self.MAX_RETRIES):
+            self._rate_limit()
+            response = requests.get(url, headers=self.headers, params=params)
+            if response.status_code == 429:
+                wait = 60 * (attempt + 1)
+                print(f"[API] Rate limited, waiting {wait}s (attempt {attempt + 1}/{self.MAX_RETRIES})")
+                time.sleep(wait)
+                continue
+            return response
+        return response  # return last 429 if all retries exhausted
     
     def get_active_dockets(self, limit: int = 25) -> List[dict]:
         """Get dockets with open comment periods."""
-        self._rate_limit()
-        
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        
-        response = requests.get(
+        response = self._get(
             f"{self.BASE_URL}/documents",
-            headers=self.headers,
             params={
                 "filter[commentEndDate][ge]": today,
                 "filter[documentType]": "Proposed Rule",
@@ -61,84 +71,68 @@ class RegulationsGovAPI:
         )
         response.raise_for_status()
         return response.json().get("data", [])
-    
+
     def get_docket(self, docket_id: str) -> Optional[dict]:
         """Get docket details."""
-        self._rate_limit()
-        
-        response = requests.get(
-            f"{self.BASE_URL}/dockets/{docket_id}",
-            headers=self.headers
-        )
+        response = self._get(f"{self.BASE_URL}/dockets/{docket_id}")
         if response.status_code == 404:
             return None
         response.raise_for_status()
         return response.json().get("data")
-    
+
     def get_comment_ids(self, docket_id: str, limit: int = 10000) -> List[str]:
         """Get list of comment IDs for a docket (fast, no content)."""
         comment_ids = []
         page = 1
-        
+
         while len(comment_ids) < limit:
-            self._rate_limit()
-            
-            response = requests.get(
+            response = self._get(
                 f"{self.BASE_URL}/comments",
-                headers=self.headers,
                 params={
                     "filter[docketId]": docket_id,
                     "page[size]": 250,
                     "page[number]": page,
                 }
             )
-            
+
             if response.status_code != 200:
                 break
-            
+
             data = response.json().get("data", [])
             if not data:
                 break
-            
+
             comment_ids.extend([c["id"] for c in data])
-            
+
             meta = response.json().get("meta", {})
             if not meta.get("hasNextPage", False):
                 break
-            
+
             page += 1
-        
+
         return comment_ids[:limit]
-    
+
     def get_comment_detail(self, comment_id: str) -> Optional[dict]:
         """Get full comment details."""
-        self._rate_limit()
-        
-        response = requests.get(
-            f"{self.BASE_URL}/comments/{comment_id}",
-            headers=self.headers
-        )
+        response = self._get(f"{self.BASE_URL}/comments/{comment_id}")
         if response.status_code == 404:
             return None
         response.raise_for_status()
         return response.json().get("data")
-    
+
     def get_total_comments(self, docket_id: str) -> int:
         """Get total comment count for a docket."""
-        self._rate_limit()
-        
-        response = requests.get(
+        response = self._get(
             f"{self.BASE_URL}/comments",
-            headers=self.headers,
             params={
                 "filter[docketId]": docket_id,
                 "page[size]": 5
             }
         )
-        
+
         if response.status_code != 200:
             return 0
-        
+
         return response.json().get("meta", {}).get("totalElements", 0)
 
 
