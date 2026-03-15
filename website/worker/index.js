@@ -54,6 +54,11 @@ export default {
         return handleDocket(docketId, env);
       }
 
+      if (path === '/report' && request.method === 'GET') {
+        const docketId = url.searchParams.get('id');
+        return handleReport(docketId, env);
+      }
+
       return jsonResponse({ error: 'Not found' }, 404);
 
     } catch (error) {
@@ -176,16 +181,40 @@ async function handleDocket(docketId, env) {
     return jsonResponse({ error: 'Docket not found' }, 404);
   }
 
-  // Get analysis if exists
-  const analyses = await supabaseQuery(env, 'analyses', {
-    select: '*',
-    filter: { docket_id: `eq.${docketId}` },
-  });
+  // Get analysis and report in parallel
+  const [analyses, reports] = await Promise.all([
+    supabaseQuery(env, 'analyses', {
+      select: '*',
+      filter: { docket_id: `eq.${docketId}` },
+    }),
+    supabaseQuery(env, 'reports', {
+      select: '*',
+      filter: { docket_id: `eq.${docketId}` },
+    }),
+  ]);
 
   return jsonResponse({
     docket: dockets[0],
     analysis: analyses[0] || null,
+    report: reports[0] || null,
   });
+}
+
+async function handleReport(docketId, env) {
+  if (!docketId) {
+    return jsonResponse({ error: 'Docket ID required' }, 400);
+  }
+
+  const reports = await supabaseQuery(env, 'reports', {
+    select: '*',
+    filter: { docket_id: `eq.${docketId}` },
+  });
+
+  if (!reports.length) {
+    return jsonResponse({ error: 'Report not found' }, 404);
+  }
+
+  return jsonResponse({ report: reports[0] });
 }
 
 async function handleSearch(request, env) {

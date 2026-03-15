@@ -6,9 +6,9 @@ Uses Supabase (PostgreSQL + pgvector) for:
 - Semantic search with embeddings
 """
 
-from .client import get_client, SupabaseClient
-from .models import Docket, Comment, Analysis, CommentEmbedding
+from .client import SupabaseClient, get_client
 from .embeddings import embed_comments, embed_query, generate_embedding
+from .models import Analysis, Comment, CommentEmbedding, Docket, Report
 
 __all__ = [
     # Client
@@ -19,6 +19,7 @@ __all__ = [
     "Comment",
     "Analysis",
     "CommentEmbedding",
+    "Report",
     # Embeddings
     "embed_comments",
     "embed_query",

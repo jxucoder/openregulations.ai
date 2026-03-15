@@ -4,19 +4,19 @@ Data models for OpenRegulations.ai
 These are simple dataclasses that map to database tables.
 """
 
-from dataclasses import dataclass, field, asdict
-from typing import Optional, List, Dict, Any
-from datetime import datetime, date
+from dataclasses import asdict, dataclass
+from datetime import date, datetime
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
 class Docket:
     """A regulatory docket from Regulations.gov"""
-    
+
     id: str                                  # e.g., "NHTSA-2025-0491"
     title: str
     agency: str                              # e.g., "NHTSA"
-    
+
     # Optional fields
     agency_name: Optional[str] = None
     abstract: Optional[str] = None
@@ -29,7 +29,7 @@ class Docket:
     total_comments_at_sync: Optional[int] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dict for database insertion."""
         d = {}
@@ -40,7 +40,7 @@ class Docket:
                 else:
                     d[k] = v
         return d
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Docket":
         """Create from database row."""
@@ -48,25 +48,25 @@ class Docket:
         for field_name in ["posted_date", "comment_start_date", "comment_end_date"]:
             if data.get(field_name) and isinstance(data[field_name], str):
                 data[field_name] = date.fromisoformat(data[field_name])
-        
+
         # Parse datetime fields
         for field_name in ["last_synced_at", "created_at", "updated_at"]:
             if data.get(field_name) and isinstance(data[field_name], str):
                 data[field_name] = datetime.fromisoformat(
                     data[field_name].replace("Z", "+00:00")
                 )
-        
+
         # Only pass known fields
         known_fields = {f.name for f in cls.__dataclass_fields__.values()}
         filtered = {k: v for k, v in data.items() if k in known_fields}
-        
+
         return cls(**filtered)
-    
+
     @classmethod
     def from_regulations_gov(cls, api_data: Dict) -> "Docket":
         """Create from Regulations.gov API response."""
         attrs = api_data.get("attributes", {})
-        
+
         return cls(
             id=api_data.get("id") or attrs.get("docketId"),
             title=attrs.get("title", ""),
@@ -84,27 +84,27 @@ class Docket:
 @dataclass
 class Comment:
     """A public comment on a docket"""
-    
+
     id: str                                  # e.g., "NHTSA-2025-0491-0001"
     docket_id: str
-    
+
     # Content
     text: Optional[str] = None
     title: Optional[str] = None
-    
+
     # Author
     author: Optional[str] = None
     organization: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
     country: str = "US"
-    
+
     # Classification (set by analysis)
     is_form_letter: bool = False
     form_letter_cluster_id: Optional[str] = None
     sentiment: Optional[str] = None          # 'oppose', 'support', 'neutral'
     quality_score: Optional[int] = None      # 1-5
-    
+
     # Metadata
     posted_date: Optional[datetime] = None
     received_date: Optional[datetime] = None
@@ -112,7 +112,7 @@ class Comment:
     attachment_count: int = 0
     fetched_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dict for database insertion."""
         d = {}
@@ -123,7 +123,7 @@ class Comment:
                 else:
                     d[k] = v
         return d
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Comment":
         """Create from database row."""
@@ -133,22 +133,22 @@ class Comment:
                 data[field_name] = datetime.fromisoformat(
                     data[field_name].replace("Z", "+00:00")
                 )
-        
+
         known_fields = {f.name for f in cls.__dataclass_fields__.values()}
         filtered = {k: v for k, v in data.items() if k in known_fields}
-        
+
         return cls(**filtered)
-    
+
     @classmethod
     def from_regulations_gov(cls, api_data: Dict, docket_id: str) -> "Comment":
         """Create from Regulations.gov API response."""
         attrs = api_data.get("attributes", {})
-        
+
         # Handle None values for names
         first = attrs.get("firstName") or ""
         last = attrs.get("lastName") or ""
         author = f"{first} {last}".strip() or None
-        
+
         return cls(
             id=api_data.get("id"),
             docket_id=docket_id,
@@ -170,16 +170,16 @@ class Comment:
 @dataclass
 class CommentEmbedding:
     """Vector embedding for a comment"""
-    
+
     comment_id: str
     embedding: List[float]
     docket_id: str
-    
+
     model: str = "text-embedding-3-small"
     sentiment: Optional[str] = None
     theme_ids: Optional[List[str]] = None
     created_at: Optional[datetime] = None
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dict for database insertion."""
         return {
@@ -190,7 +190,7 @@ class CommentEmbedding:
             "sentiment": self.sentiment,
             "theme_ids": self.theme_ids,
         }
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "CommentEmbedding":
         """Create from database row."""
@@ -207,34 +207,34 @@ class CommentEmbedding:
 @dataclass
 class Analysis:
     """AI analysis results for a docket"""
-    
+
     docket_id: str
-    
+
     # Statistics
     total_comments: int = 0
     unique_comments: int = 0
     form_letter_count: int = 0
     form_letter_percentage: float = 0.0
     high_quality_count: int = 0
-    
+
     # Analysis results (stored as JSON)
     sentiment: Optional[Dict] = None          # {"oppose": 62, "support": 28, "neutral": 10}
     themes: Optional[List[Dict]] = None       # [{id, name, count, ...}, ...]
     campaigns: Optional[List[Dict]] = None    # [{id, template, count, ...}, ...]
     notable_comments: Optional[List[Dict]] = None
-    
+
     # Generated content
     executive_summary: Optional[str] = None
     key_findings: Optional[List[str]] = None
     alerts: Optional[List[Dict]] = None
-    
+
     # Metadata
     analyzed_at: Optional[datetime] = None
     analysis_version: str = "1.0"
     model_used: str = "claude-sonnet-4-20250514"
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dict for database insertion."""
         d = {
@@ -254,12 +254,12 @@ class Analysis:
             "analysis_version": self.analysis_version,
             "model_used": self.model_used,
         }
-        
+
         if self.analyzed_at:
             d["analyzed_at"] = self.analyzed_at.isoformat()
-        
+
         return d
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Analysis":
         """Create from database row."""
@@ -269,8 +269,52 @@ class Analysis:
                 data[field_name] = datetime.fromisoformat(
                     data[field_name].replace("Z", "+00:00")
                 )
-        
+
         known_fields = {f.name for f in cls.__dataclass_fields__.values()}
         filtered = {k: v for k, v in data.items() if k in known_fields}
-        
+
+        return cls(**filtered)
+
+
+@dataclass
+class Report:
+    """Freeform HTML analysis report for a docket"""
+
+    docket_id: str
+    report_html: str
+
+    # Metadata
+    report_metadata: Optional[Dict] = None   # {total_comments, form_letter_pct, sample_size, input_tokens, output_tokens}
+    model_used: str = "claude-sonnet-4-20250514"
+    generated_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    id: Optional[int] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dict for database insertion."""
+        d = {
+            "docket_id": self.docket_id,
+            "report_html": self.report_html,
+            "report_metadata": self.report_metadata,
+            "model_used": self.model_used,
+        }
+
+        if self.generated_at:
+            d["generated_at"] = self.generated_at.isoformat()
+
+        return d
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "Report":
+        """Create from database row."""
+        for field_name in ["generated_at", "created_at", "updated_at"]:
+            if data.get(field_name) and isinstance(data[field_name], str):
+                data[field_name] = datetime.fromisoformat(
+                    data[field_name].replace("Z", "+00:00")
+                )
+
+        known_fields = {f.name for f in cls.__dataclass_fields__.values()}
+        filtered = {k: v for k, v in data.items() if k in known_fields}
+
         return cls(**filtered)

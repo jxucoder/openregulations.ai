@@ -1,0 +1,62 @@
+name: Generate Reports
+
+on:
+  schedule:
+    - cron: '0 9 * * *'  # Daily at 9am UTC (after sync at 7am)
+
+  workflow_dispatch:
+    inputs:
+      docket_id:
+        description: 'Specific docket ID to generate report for (leave empty for all pending)'
+        required: false
+      max_dockets:
+        description: 'Max dockets to generate reports for (default 5)'
+        required: false
+        default: '5'
+      sample_size:
+        description: 'Max comments to sample per docket (default 300)'
+        required: false
+        default: '300'
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Generate reports
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -n "${{ github.event.inputs.docket_id }}" ]; then
+            uv run python -m src.jobs.generate_report \
+              --docket-id "${{ github.event.inputs.docket_id }}" \
+              --sample-size "${{ github.event.inputs.sample_size || '300' }}"
+          else
+            uv run python -m src.jobs.generate_report \
+              --all \
+              --max-dockets "${{ github.event.inputs.max_dockets || '5' }}" \
+              --sample-size "${{ github.event.inputs.sample_size || '300' }}"
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Report Generation Results" >> $GITHUB_STEP_SUMMARY
+          echo "- **Time**: $(date -u)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY

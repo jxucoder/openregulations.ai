@@ -4,6 +4,7 @@
  */
 
 import { renderChat } from './chat.js';
+import { renderReport } from './report.js';
 import { formatNumber, daysUntil } from '../lib/utils.js';
 
 // App state
@@ -74,6 +75,9 @@ let SAMPLE_ANALYSIS = {
   }
 };
 
+// Report data cache (docket_id -> report object)
+let reportCache = {};
+
 // API URL - set via env or use sample data
 const API_URL = import.meta.env.VITE_WORKER_URL || '';
 
@@ -102,10 +106,11 @@ async function fetchDocketDetail(docketId) {
   if (!API_URL) {
     return {
       docket: SAMPLE_DOCKETS.find(d => d.id === docketId),
-      analysis: SAMPLE_ANALYSIS[docketId]
+      analysis: SAMPLE_ANALYSIS[docketId],
+      report: null
     };
   }
-  
+
   try {
     const response = await fetch(`${API_URL}/docket?id=${docketId}`);
     if (response.ok) {
@@ -115,16 +120,18 @@ async function fetchDocketDetail(docketId) {
       const sampleAnalysis = SAMPLE_ANALYSIS[docketId];
       return {
         docket: { ...sampleDocket, ...data.docket },
-        analysis: data.analysis || sampleAnalysis
+        analysis: data.analysis || sampleAnalysis,
+        report: data.report || null
       };
     }
   } catch (e) {
     console.warn('Failed to fetch docket detail');
   }
-  
+
   return {
     docket: SAMPLE_DOCKETS.find(d => d.id === docketId),
-    analysis: SAMPLE_ANALYSIS[docketId]
+    analysis: SAMPLE_ANALYSIS[docketId],
+    report: null
   };
 }
 
@@ -415,11 +422,18 @@ function renderWelcome() {
 function renderDocketDetail() {
   const docket = dockets.find(d => d.id === selectedDocketId);
   const analysis = SAMPLE_ANALYSIS[selectedDocketId];
-  
+  const report = reportCache[selectedDocketId];
+
   if (!docket) {
     return `<div class="p-8 text-center text-navy-500">Docket not found</div>`;
   }
-  
+
+  // Use report metadata for stats if available, fall back to analysis
+  const meta = report?.report_metadata || {};
+  const totalComments = meta.total_comments || analysis?.total_comments || docket.total_comments;
+  const uniqueComments = meta.unique_comments || analysis?.unique_comments;
+  const formLetterPct = meta.form_letter_pct ?? analysis?.form_letter_percentage;
+
   return `
     <div class="h-full flex flex-col">
       <!-- Scrollable content -->
@@ -431,45 +445,47 @@ function renderDocketDetail() {
               <span class="px-2 py-1 text-xs font-medium bg-navy-100 text-navy-700 rounded">${docket.agency}</span>
               <span class="text-sm text-navy-400">${docket.id}</span>
             </div>
-            
+
             <h1 class="text-xl font-serif font-bold text-navy-900 mb-3">${docket.title}</h1>
-            
+
             ${(docket.summary || docket.abstract) ? `
               <p class="text-sm text-navy-600 mb-4 leading-relaxed">${docket.summary || docket.abstract}</p>
             ` : ''}
-            
+
             <!-- Stats row -->
             <div class="flex items-end justify-between pt-4 border-t border-navy-100">
               <div class="flex gap-8">
                 <div>
-                  <div class="text-2xl font-bold text-navy-900">${formatNumber(analysis?.total_comments || docket.total_comments)}</div>
+                  <div class="text-2xl font-bold text-navy-900">${formatNumber(totalComments)}</div>
                   <div class="text-xs text-navy-500">Total Comments</div>
                 </div>
                 <div>
-                  <div class="text-2xl font-bold text-navy-900">${analysis?.unique_comments || '—'}</div>
+                  <div class="text-2xl font-bold text-navy-900">${uniqueComments || '—'}</div>
                   <div class="text-xs text-navy-500">Unique</div>
                 </div>
                 <div>
-                  <div class="text-2xl font-bold text-navy-900">${analysis?.form_letter_percentage?.toFixed(0) || '—'}%</div>
+                  <div class="text-2xl font-bold text-navy-900">${formLetterPct != null ? formLetterPct.toFixed(0) + '%' : '—'}</div>
                   <div class="text-xs text-navy-500">Form Letters</div>
                 </div>
-                <div>
-                  <div class="text-2xl font-bold text-navy-900">${analysis?.high_quality_count || '—'}</div>
-                  <div class="text-xs text-navy-500">High Quality</div>
-                </div>
+                ${!report ? `
+                  <div>
+                    <div class="text-2xl font-bold text-navy-900">${analysis?.high_quality_count || '—'}</div>
+                    <div class="text-xs text-navy-500">High Quality</div>
+                  </div>
+                ` : ''}
               </div>
               <div class="text-right">
                 <div class="text-xs text-navy-400">Last updated</div>
-                <div class="text-sm text-navy-600">${analysis?.last_updated || 'Feb 2, 2026'}</div>
+                <div class="text-sm text-navy-600">${report?.generated_at ? new Date(report.generated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : analysis?.last_updated || '—'}</div>
               </div>
             </div>
           </div>
-          
-          ${analysis ? renderAnalysisSections(analysis) : `
+
+          ${report ? renderReport(report, docket) : (analysis ? renderAnalysisSections(analysis) : `
             <div class="bg-navy-50 rounded-xl p-8 text-center">
               <p class="text-navy-500">Analysis not yet available for this docket.</p>
             </div>
-          `}
+          `)}
         </div>
       </div>
     </div>
@@ -670,8 +686,8 @@ async function selectDocket(docketId) {
   `;
   
   // Fetch docket detail from API
-  const { docket, analysis } = await fetchDocketDetail(docketId);
-  
+  const { docket, analysis, report } = await fetchDocketDetail(docketId);
+
   // Store in cache for rendering
   if (docket) {
     const idx = dockets.findIndex(d => d.id === docketId);
@@ -679,6 +695,9 @@ async function selectDocket(docketId) {
   }
   if (analysis) {
     SAMPLE_ANALYSIS[docketId] = analysis;
+  }
+  if (report) {
+    reportCache[docketId] = report;
   }
   
   // Update main content
