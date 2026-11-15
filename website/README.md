@@ -79,9 +79,11 @@ Secrets are managed in 1Password; see `scripts/secrets.sh`.
 
 ## Design
 
-- **Typography**: Source Serif 4 for headings and report text, Inter for interface text
-- **Color**: ink (near-black navy) on warm paper; amber marks form-letter campaigns everywhere
-- **Principle**: separate campaigns from original voices, and always state what share of the docket an analysis covers
+- **Look**: tech + policy. Ultramarine `#2433f0` on cool white, ink text, square corners
+- **Type**: Public Sans (the U.S. federal design-system face) and JetBrains Mono for IDs and counts
+- **Figures**: [Hairline](https://hairline.lucasmarkes.com) line figures (MIT) on the hero and in empty states,
+  mounted from any `data-figure="<name>"` element by `src/lib/figures.js`
+- **Product context**: `PRODUCT.md` and `.impeccable/surfaces/website.md` at the repo root
 
 ## License
 

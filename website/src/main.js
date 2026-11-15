@@ -6,6 +6,7 @@ import { homeView } from './views/home.js';
 import { docketsView } from './views/dockets.js';
 import { docketView } from './views/docket.js';
 import { aboutView } from './views/about.js';
+import { watchFigures, destroyFigures } from './lib/figures.js';
 
 const SITE = 'OpenRegulations.ai';
 const DEFAULT_DESCRIPTION = document.querySelector('meta[name="description"]')?.content || '';
@@ -21,7 +22,7 @@ function notFoundView(main) {
   main.innerHTML = `
     <div class="container-page py-24 text-center">
       <p class="eyebrow">404</p>
-      <h1 class="mt-3 font-serif text-3xl font-semibold text-ink-900">This page doesn't exist</h1>
+      <h1 class="mt-3 font-sans text-3xl font-semibold text-ink-900">This page doesn't exist</h1>
       <p class="mt-3 text-ink-600">The link may be outdated.</p>
       <a href="/" class="btn-primary mt-8">Go home</a>
     </div>`;
@@ -39,6 +40,7 @@ app.innerHTML = `
   <main id="main" tabindex="-1" class="min-h-[60vh] outline-none"></main>
   <div id="footer">${footer()}</div>`;
 const main = document.getElementById('main');
+watchFigures(main);
 let navToken = 0;
 
 async function render({ focus = false } = {}) {
@@ -46,6 +48,7 @@ async function render({ focus = false } = {}) {
   const path = window.location.pathname;
   document.getElementById('header').innerHTML = header(path);
   closeChat();
+  destroyFigures();
 
   let route = null;
   let match = null;
@@ -59,7 +62,7 @@ async function render({ focus = false } = {}) {
   setMeta(route === routes[0] ? {} : { title: '…' });
   const meta = await view(main, params);
   if (token !== navToken) return;
-  setMeta(meta || (route === routes[1] ? { title: 'Dockets', description: 'Browse federal rulemaking dockets and their public comments.' } : {}));
+  setMeta(meta || (route === routes[1] ? { title: 'Analyses', description: 'AI analyses of public comments on federal rulemaking dockets.' } : {}));
   if (focus) main.focus({ preventScroll: true });
 }
 

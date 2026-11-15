@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@lucasmarkes/hairline": "^0.5.1",
     "dompurify": "^3.2.0",
     "marked": "^15.0.12"
   },

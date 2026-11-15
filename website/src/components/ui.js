@@ -4,15 +4,6 @@
 
 import { esc, fmtNum, fmtCompact, fmtPct, fmtDate, agencyName } from '../lib/format.js';
 
-export const logoMark = (cls = 'h-7 w-7') => `
-  <svg class="${cls}" viewBox="0 0 32 32" aria-hidden="true">
-    <rect width="32" height="32" rx="6" fill="#0e1a2b"/>
-    <rect x="7" y="8" width="18" height="2.5" rx="1.25" fill="#fbfaf7"/>
-    <rect x="7" y="13.5" width="18" height="2.5" rx="1.25" fill="#fbfaf7" opacity=".55"/>
-    <rect x="7" y="19" width="11" height="2.5" rx="1.25" fill="#f0a43a"/>
-    <rect x="7" y="24.5" width="14" height="2.5" rx="1.25" fill="#fbfaf7" opacity=".55"/>
-  </svg>`;
-
 export const icons = {
   arrowRight: '<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M3 10a.75.75 0 0 1 .75-.75h10.64l-3.97-3.97a.75.75 0 1 1 1.06-1.06l5.25 5.25a.75.75 0 0 1 0 1.06l-5.25 5.25a.75.75 0 1 1-1.06-1.06l3.97-3.97H3.75A.75.75 0 0 1 3 10Z" clip-rule="evenodd"/></svg>',
   external: '<svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M4.25 5.5a.75.75 0 0 0-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 0 0 .75-.75v-4a.75.75 0 0 1 1.5 0v4A2.25 2.25 0 0 1 12.75 17h-8.5A2.25 2.25 0 0 1 2 14.75v-8.5A2.25 2.25 0 0 1 4.25 4h5a.75.75 0 0 1 0 1.5h-5Zm7.25-.75a.75.75 0 0 1 .75-.75h3.5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0V6.56l-5.22 5.22a.75.75 0 1 1-1.06-1.06l5.22-5.22H12.25a.75.75 0 0 1-.75-.75Z" clip-rule="evenodd"/></svg>',
@@ -60,23 +51,16 @@ export function sentimentBar(s) {
     </div>`;
 }
 
-/** Card used on the home page for published analyses. */
-export function reportCard(d) {
+/** Row used on the home page for published analyses. */
+export function reportRow(d) {
   return `
-    <a href="/docket/${encodeURIComponent(d.id)}" class="card group flex flex-col p-5 transition hover:-translate-y-0.5 hover:border-ink-200 hover:shadow-[0_8px_24px_-12px_rgba(14,26,43,0.25)]">
-      <div class="flex items-center justify-between gap-2">
-        <span class="tag-agency" title="${esc(agencyName(d.agency))}">${esc(d.agency)}</span>
-        <span class="truncate font-mono text-[11px] text-ink-400">${esc(d.id)}</span>
-      </div>
-      <h3 class="mt-3 line-clamp-3 font-serif text-lg font-semibold leading-snug text-ink-900 group-hover:text-accent-700">${esc(d.title)}</h3>
-      <div class="mt-auto pt-5">
-        ${compositionBar(d.formPct)}
-        <div class="mt-2.5 flex items-center justify-between text-xs text-ink-500">
-          <span><span class="font-semibold text-ink-800">${esc(fmtCompact(d.total))}</span> comments${d.formPct != null ? ` · ${esc(fmtPct(d.formPct))} form letters` : ''}</span>
-          ${d.reportAt ? `<span>${esc(fmtDate(d.reportAt))}</span>` : ''}
-        </div>
-      </div>
-    </a>`;
+    <li class="border-b border-ink-200">
+      <a href="/docket/${encodeURIComponent(d.id)}" class="group flex flex-wrap items-baseline gap-x-8 gap-y-1 py-5">
+        <span class="w-20 shrink-0 font-mono text-[13px] font-bold text-accent-600" title="${esc(agencyName(d.agency))}">${esc(d.agency)}</span>
+        <span class="min-w-0 flex-[999_1_22rem] text-lg font-bold leading-snug tracking-tight text-ink-900 group-hover:text-accent-700">${esc(d.title)}</span>
+        <span class="shrink-0 font-mono text-[13px] text-ink-500">${esc(fmtNum(d.total))} comments</span>
+      </a>
+    </li>`;
 }
 
 /** Row used in docket lists. */
@@ -112,11 +96,21 @@ export function loadingBlock(lines = 3) {
     </div>`;
 }
 
-export function errorBlock(message) {
+export function emptyState({ figure, title, body = '', action = '' }) {
   return `
-    <div class="card border-rose-200 bg-rose-50/50 p-6 text-sm text-rose-900">
-      <p class="font-semibold">We couldn't load this data.</p>
-      <p class="mt-1 text-rose-800">${esc(message)}</p>
-      <button type="button" data-action="reload" class="btn-secondary mt-4">Try again</button>
+    <div class="mx-auto flex max-w-md flex-col items-center px-4 py-10 text-center">
+      <div class="fig-ink w-52" data-figure="${figure}"></div>
+      <p class="mt-2 text-lg font-extrabold text-ink-900">${title}</p>
+      ${body ? `<p class="mt-1.5 text-sm leading-relaxed text-ink-600">${body}</p>` : ''}
+      ${action}
     </div>`;
+}
+
+export function errorBlock(message) {
+  return emptyState({
+    figure: 'plug',
+    title: "We couldn't load this data",
+    body: esc(message),
+    action: '<button type="button" data-action="reload" class="btn-secondary mt-5">Try again</button>',
+  });
 }

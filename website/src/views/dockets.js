@@ -1,6 +1,6 @@
 import { getDockets } from '../lib/data.js';
 import { esc, fmtNum, agencyName } from '../lib/format.js';
-import { docketRow, icons, loadingBlock, errorBlock } from '../components/ui.js';
+import { docketRow, icons, loadingBlock, errorBlock, emptyState } from '../components/ui.js';
 
 const SORTS = {
   comments: { label: 'Most comments', fn: (a, b) => b.total - a.total },
@@ -16,7 +16,7 @@ function readState() {
   return {
     q: p.get('q') || '',
     agency: p.get('agency') || '',
-    analyzed: p.get('analyzed') === '1',
+    analyzed: p.get('all') !== '1',
     sort: SORTS[p.get('sort')] ? p.get('sort') : 'comments',
   };
 }
@@ -25,7 +25,7 @@ function writeState(state) {
   const p = new URLSearchParams();
   if (state.q) p.set('q', state.q);
   if (state.agency) p.set('agency', state.agency);
-  if (state.analyzed) p.set('analyzed', '1');
+  if (!state.analyzed) p.set('all', '1');
   if (state.sort !== 'comments') p.set('sort', state.sort);
   const qs = p.toString();
   window.history.replaceState(window.history.state, '', `/dockets${qs ? `?${qs}` : ''}`);
@@ -35,14 +35,10 @@ export async function docketsView(main) {
   const state = readState();
 
   main.innerHTML = `
-    <section class="border-b border-ink-100">
-      <div class="container-page py-12 sm:py-14">
-        <p class="eyebrow">Dockets</p>
-        <h1 class="mt-3 font-serif text-3xl font-semibold tracking-tight text-ink-900 sm:text-4xl">Federal rules open to public comment</h1>
-        <p class="mt-3 max-w-2xl text-ink-600">
-          A docket holds one rulemaking: the proposal, supporting documents, and every public comment.
-          Dockets marked <span class="tag-report align-middle">Analysis</span> have a published AI analysis.
-        </p>
+    <section class="border-b border-ink-200 bg-white">
+      <div class="container-page py-10 sm:py-12">
+        <h1 class="text-3xl font-black tracking-[-0.035em] text-ink-900 sm:text-5xl">Analyses</h1>
+        <p class="mt-3 max-w-2xl text-ink-600">AI analyses of public comments, one per federal rulemaking docket.</p>
       </div>
     </section>
 
@@ -65,7 +61,7 @@ export async function docketsView(main) {
         </label>
         <label class="flex cursor-pointer items-center gap-2 text-sm text-ink-700 sm:col-span-3">
           <input id="f-analyzed" type="checkbox" class="h-4 w-4 rounded border-ink-300 text-accent-600 focus:ring-accent-500" ${state.analyzed ? 'checked' : ''}>
-          Only show dockets with an analysis
+          Only dockets with an analysis
         </label>
       </form>
 
@@ -115,8 +111,11 @@ export async function docketsView(main) {
     countEl.textContent = `${fmtNum(rows.length)} of ${fmtNum(dockets.length)} dockets`;
     list.innerHTML = rows.length
       ? rows.map(docketRow).join('')
-      : `<li class="px-5 py-12 text-center text-sm text-ink-500">No dockets match these filters.
-           <button type="button" id="clear-filters" class="ml-1 font-semibold text-accent-700 hover:underline">Clear filters</button></li>`;
+      : `<li>${emptyState({
+          figure: 'query',
+          title: 'No dockets match',
+          action: '<button type="button" id="clear-filters" class="btn-secondary mt-5">Clear filters</button>',
+        })}</li>`;
     writeState(state);
   };
 
@@ -126,10 +125,9 @@ export async function docketsView(main) {
   main.querySelector('#f-analyzed').addEventListener('change', (e) => { state.analyzed = e.target.checked; apply(); });
   list.addEventListener('click', (e) => {
     if (e.target.id !== 'clear-filters') return;
-    Object.assign(state, { q: '', agency: '', analyzed: false });
+    Object.assign(state, { q: '', agency: '', analyzed: state.analyzed });
     main.querySelector('#f-q').value = '';
     agencySelect.value = '';
-    main.querySelector('#f-analyzed').checked = false;
     apply();
   });
 

@@ -2,7 +2,7 @@ import { REPO_URL } from '../components/layout.js';
 
 const section = (title, body) => `
   <section class="mt-12">
-    <h2 class="font-serif text-2xl font-semibold tracking-tight text-ink-900">${title}</h2>
+    <h2 class="font-sans text-2xl font-extrabold tracking-tight text-ink-900">${title}</h2>
     <div class="mt-4 space-y-4 leading-relaxed text-ink-700">${body}</div>
   </section>`;
 
@@ -11,7 +11,7 @@ export function aboutView(main) {
     <div class="container-page py-12 sm:py-16">
       <div class="mx-auto max-w-2xl">
         <p class="eyebrow">Methodology</p>
-        <h1 class="mt-3 font-serif text-4xl font-semibold tracking-tight text-ink-900">How the analysis works</h1>
+        <h1 class="mt-3 font-sans text-4xl font-black tracking-[-0.035em] text-ink-900">How the analysis works</h1>
         <p class="mt-5 text-lg leading-relaxed text-ink-600">
           Federal agencies must take public comments into account before finalizing most rules. Large dockets get thousands of comments,
           and many of them are the same letter submitted again and again. This page explains how we turn that into something readable,

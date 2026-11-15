@@ -1,9 +1,9 @@
-import { getDocket, getDockets } from '../lib/data.js';
+import { getDocket } from '../lib/data.js';
 import { renderReport } from '../lib/markdown.js';
 import {
   esc, fmtNum, fmtPct, fmtDate, daysUntil, decodeEntities, agencyName, regulationsUrl, commentUrl,
 } from '../lib/format.js';
-import { compositionBar, sentimentBar, icons, loadingBlock, errorBlock } from '../components/ui.js';
+import { compositionBar, sentimentBar, icons, loadingBlock, errorBlock, emptyState } from '../components/ui.js';
 import { openChat } from '../components/chat.js';
 import { chatAvailable } from '../lib/api-client.js';
 
@@ -26,28 +26,17 @@ function deadline(end) {
 function glanceCard(docketTotal, report, analysis) {
   const meta = report?.report_metadata || {};
   const retrieved = meta.total_comments ?? analysis?.total_comments;
-  const unique = meta.unique_comments ?? analysis?.unique_comments;
   const formPct = meta.form_letter_pct ?? (analysis?.form_letter_percentage != null ? Number(analysis.form_letter_percentage) : null);
-  const campaigns = meta.campaign_count ?? (Array.isArray(analysis?.campaigns) ? analysis.campaigns.length : null);
   const sample = meta.sample_size;
   const partial = retrieved != null && docketTotal > retrieved;
-
   return `
     <div class="card p-5">
-      <h2 class="eyebrow">At a glance</h2>
-      <dl class="mt-2 divide-y divide-ink-100">
-        ${stat('Comments on docket', esc(fmtNum(docketTotal)), 'Per Regulations.gov')}
-        ${retrieved != null ? stat('Retrieved for analysis', esc(fmtNum(retrieved))) : ''}
-        ${unique != null ? stat('Original comments', esc(fmtNum(unique)), 'After removing form letters') : ''}
-        ${sample != null ? stat('Read by the AI', esc(fmtNum(sample))) : ''}
-        ${campaigns != null ? stat('Form-letter campaigns', esc(fmtNum(campaigns))) : ''}
+      <dl class="grid grid-cols-2 gap-4 font-mono">
+        <div><dt class="text-xs text-ink-500">comments</dt><dd class="mt-1 text-2xl font-bold text-ink-900">${esc(fmtNum(docketTotal))}</dd></div>
+        ${sample != null ? `<div><dt class="text-xs text-ink-500">read by AI</dt><dd class="mt-1 text-2xl font-bold text-ink-900">${esc(fmtNum(sample))}</dd></div>` : ''}
       </dl>
-      ${formPct != null ? `<div class="mt-4">${compositionBar(formPct, { height: 'h-2', label: true })}</div>` : ''}
-      ${partial ? `
-        <p class="mt-4 rounded-md bg-paper-100 p-3 text-xs leading-relaxed text-ink-600">
-          This analysis covers the ${esc(fmtNum(retrieved))} comments retrieved so far, out of ${esc(fmtNum(docketTotal))} on the docket.
-          The percentages describe that set, not the whole docket.
-        </p>` : ''}
+      ${formPct != null ? `<div class="mt-5">${compositionBar(formPct, { height: 'h-2', label: true })}</div>` : ''}
+      ${partial ? `<p class="mt-4 text-xs leading-relaxed text-ink-500">Based on the ${esc(fmtNum(retrieved))} comments retrieved so far.</p>` : ''}
     </div>`;
 }
 
@@ -55,7 +44,7 @@ function tocCard(toc) {
   if (toc.length < 3) return '';
   return `
     <nav class="card hidden p-5 lg:block" aria-label="In this analysis">
-      <h2 class="eyebrow">In this analysis</h2>
+      <h2 class="eyebrow">in this analysis</h2>
       <ol class="mt-3 space-y-1.5 text-sm">
         ${toc.map((t) => `<li><a href="#${t.id}" data-toc="${t.id}" class="block border-l-2 border-transparent py-0.5 pl-3 text-ink-600 transition-colors hover:border-ink-300 hover:text-ink-900">${esc(t.text)}</a></li>`).join('')}
       </ol>
@@ -74,7 +63,7 @@ function structuredSections(analysis) {
     <section class="mt-14 space-y-10 border-t border-ink-100 pt-10" aria-labelledby="structured-heading">
       <div>
         <p class="eyebrow">Structured analysis</p>
-        <h2 id="structured-heading" class="mt-2 font-serif text-2xl font-semibold tracking-tight text-ink-900">Themes and sentiment</h2>
+        <h2 id="structured-heading" class="mt-2 font-sans text-2xl font-semibold tracking-tight text-ink-900">Themes and sentiment</h2>
         <p class="mt-2 text-sm text-ink-500">From a separate classification pass${analysis.analyzed_at ? ` on ${esc(fmtDate(analysis.analyzed_at))}` : ''}, which may cover a different sample than the analysis above.</p>
       </div>
 
@@ -110,7 +99,7 @@ function structuredSections(analysis) {
                   <span class="font-semibold text-campaign-700">${esc(fmtNum(c.comment_count))} identical comments</span>
                   ${c.percentage != null ? `<span class="text-ink-500">${esc(fmtPct(c.percentage, 1))} of retrieved</span>` : ''}
                 </div>
-                <p class="mt-2 line-clamp-3 font-serif text-sm leading-relaxed text-ink-700">“${esc(decodeEntities(c.template_snippet))}…”</p>
+                <p class="mt-2 line-clamp-3 font-sans text-sm leading-relaxed text-ink-700">“${esc(decodeEntities(c.template_snippet))}…”</p>
               </li>`).join('')}
           </ul>
         </div>` : ''}
@@ -121,7 +110,7 @@ function structuredSections(analysis) {
           <ul class="mt-4 space-y-4">
             ${notable.map((n) => `
               <li class="card p-5">
-                <blockquote class="font-serif leading-relaxed text-ink-800">“${esc(decodeEntities(n.excerpt))}”</blockquote>
+                <blockquote class="font-sans leading-relaxed text-ink-800">“${esc(decodeEntities(n.excerpt))}”</blockquote>
                 <div class="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-ink-500">
                   <span><span class="font-semibold text-ink-800">${esc(n.author || 'Anonymous')}</span>${n.organization ? `, ${esc(n.organization)}` : ''}</span>
                   ${n.comment_id ? `<a class="font-mono hover:text-accent-700" href="https://www.regulations.gov/comment/${encodeURIComponent(n.comment_id)}" target="_blank" rel="noopener noreferrer">${esc(n.comment_id)}</a>` : ''}
@@ -135,15 +124,13 @@ function structuredSections(analysis) {
 
 function pendingState(docket) {
   return `
-    <div class="card p-8 text-center sm:p-12">
-      <div class="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-paper-100 text-ink-500">
-        <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm.75-13a.75.75 0 0 0-1.5 0v5c0 .2.08.39.22.53l3 3a.75.75 0 1 0 1.06-1.06l-2.78-2.78V5Z" clip-rule="evenodd"/></svg>
-      </div>
-      <h2 class="mt-4 font-serif text-xl font-semibold text-ink-900">No analysis yet</h2>
-      <p class="mx-auto mt-2 max-w-md text-sm leading-relaxed text-ink-600">
-        We track this docket, but haven't published an analysis of its comments. Analyses are generated daily, starting with the dockets that have the most comments.
-      </p>
-      <a href="${regulationsUrl(docket.id)}" target="_blank" rel="noopener noreferrer" class="btn-secondary mt-6">Read the comments on Regulations.gov ${icons.external}</a>
+    <div class="card">
+      ${emptyState({
+        figure: 'drawer',
+        title: 'No analysis yet',
+        body: `We track this docket but haven't analyzed its ${esc(fmtNum(docket.total_comments_at_sync))} comments yet.`,
+        action: `<a href="${regulationsUrl(docket.id)}" target="_blank" rel="noopener noreferrer" class="btn-secondary mt-5">Read them on Regulations.gov ${icons.external}</a>`,
+      })}
     </div>`;
 }
 
@@ -173,7 +160,7 @@ export async function docketView(main, { id }) {
     main.innerHTML = `
       <div class="container-page py-24 text-center">
         <p class="eyebrow">Not found</p>
-        <h1 class="mt-3 font-serif text-3xl font-semibold text-ink-900">We don't track docket “${esc(id)}”</h1>
+        <h1 class="mt-3 font-sans text-3xl font-semibold text-ink-900">We don't track docket “${esc(id)}”</h1>
         <p class="mt-3 text-ink-600">It may still exist on Regulations.gov.</p>
         <div class="mt-8 flex justify-center gap-3">
           <a class="btn-primary" href="/dockets">Browse dockets</a>
@@ -196,7 +183,7 @@ export async function docketView(main, { id }) {
       <header class="border-b border-ink-100">
         <div class="container-page pb-10 pt-8 sm:pt-10">
           <nav class="text-sm text-ink-500" aria-label="Breadcrumb">
-            <a href="/dockets" class="hover:text-ink-900">Dockets</a>
+            <a href="/dockets" class="hover:text-ink-900">Analyses</a>
             <span class="mx-1.5 text-ink-300">/</span>
             <a href="/dockets?agency=${encodeURIComponent(docket.agency)}" class="hover:text-ink-900">${esc(docket.agency)}</a>
           </nav>
@@ -206,7 +193,7 @@ export async function docketView(main, { id }) {
             <span class="text-ink-300" aria-hidden="true">·</span>
             <span class="font-mono text-xs text-ink-500">${esc(docket.id)}</span>
           </div>
-          <h1 class="mt-4 max-w-4xl font-serif text-3xl font-semibold leading-tight tracking-tight text-ink-900 sm:text-4xl lg:text-[2.75rem]">${esc(docket.title)}</h1>
+          <h1 class="mt-4 max-w-4xl text-3xl font-black leading-[1.05] tracking-[-0.035em] text-ink-900 sm:text-4xl lg:text-5xl">${esc(docket.title)}</h1>
           ${docket.abstract ? `<p class="mt-5 max-w-3xl text-lg leading-relaxed text-ink-600">${esc(docket.abstract)}</p>` : ''}
           <div class="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-ink-600">
             <span><span class="font-semibold text-ink-900">${esc(fmtNum(total))}</span> public comments</span>
@@ -240,7 +227,6 @@ export async function docketView(main, { id }) {
           <div class="space-y-5 lg:sticky lg:top-24">
             ${glanceCard(total, report, analysis)}
             ${body ? tocCard(body.toc) : ''}
-            <div id="related" class="hidden lg:block"></div>
           </div>
         </aside>
       </div>
@@ -248,7 +234,6 @@ export async function docketView(main, { id }) {
 
   main.querySelector('#ask-btn')?.addEventListener('click', () => openChat(docket));
   if (body) watchToc(main);
-  renderRelated(main, docket);
 
   return {
     title: `${docket.title} (${docket.id})`,
@@ -270,31 +255,4 @@ function watchToc(main) {
     }
   }, { rootMargin: '-15% 0px -70% 0px' });
   main.querySelectorAll('.report h2[id]').forEach((h) => observer.observe(h));
-}
-
-async function renderRelated(main, docket) {
-  try {
-    const all = await getDockets();
-    const related = all
-      .filter((d) => d.id !== docket.id && d.agency === docket.agency)
-      .sort((a, b) => Number(b.hasReport) - Number(a.hasReport) || b.total - a.total)
-      .slice(0, 4);
-    const el = main.querySelector('#related');
-    if (!el || !related.length) return;
-    el.innerHTML = `
-      <div class="card p-5">
-        <h2 class="eyebrow">More from ${esc(docket.agency)}</h2>
-        <ul class="mt-3 space-y-3">
-          ${related.map((d) => `
-            <li>
-              <a href="/docket/${encodeURIComponent(d.id)}" class="group block">
-                <span class="line-clamp-2 text-sm font-medium leading-snug text-ink-800 group-hover:text-accent-700">${esc(d.title)}</span>
-                <span class="mt-0.5 block text-xs text-ink-500">${esc(fmtNum(d.total))} comments${d.hasReport ? ' · Analysis' : ''}</span>
-              </a>
-            </li>`).join('')}
-        </ul>
-      </div>`;
-  } catch {
-    /* related list is optional */
-  }
 }
