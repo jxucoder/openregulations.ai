@@ -10,6 +10,13 @@ on:
         description: 'Max comments to fetch per docket (default 10000)'
         required: false
         default: '10000'
+      source:
+        description: "Where to fetch from: 'api' (live, rate limited) or 'mirrulations' (S3 mirror, fast, lags the API)"
+        type: choice
+        options:
+          - api
+          - mirrulations
+        default: api
 
 jobs:
   backfill:
@@ -39,10 +46,12 @@ jobs:
           if [ -n "${{ github.event.inputs.docket_id }}" ]; then
             uv run python -m src.jobs.sync \
               --docket-id "${{ github.event.inputs.docket_id }}" \
+              --source "${{ github.event.inputs.source || 'api' }}" \
               --max-comments "${{ github.event.inputs.max_comments || '10000' }}"
           else
             uv run python -m src.jobs.sync \
               --backfill \
+              --source "${{ github.event.inputs.source || 'api' }}" \
               --max-comments "${{ github.event.inputs.max_comments || '10000' }}"
           fi
 

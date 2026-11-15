@@ -47,6 +47,9 @@ uv run python <script.py>
 # Sync comments from Regulations.gov
 uv run python -m src.jobs.sync --docket-id NHTSA-2025-0491
 
+# Bulk backfill from the Mirrulations S3 mirror (no API key or rate limit, lags the live API)
+uv run python -m src.jobs.sync --docket-id NHTSA-2025-0491 --source mirrulations
+
 # Run AI analysis on a docket
 uv run python -m src.jobs.analyze --docket-id NHTSA-2025-0491
 
@@ -175,7 +178,7 @@ npm run build    # Build for production
 ## Important Notes
 
 - **Never hardcode API keys** - Always use environment variables
-- **Rate limits**: Regulations.gov API has 1,000 requests/hour limit
+- **Rate limits**: Regulations.gov API has 1,000 requests/hour limit. For large backfills use `--source mirrulations`, then run the regular sync to pick up the newest comments
 - **Form letters**: ~50-60% of comments are typically form letters
 - **Embeddings**: Only generate for non-form-letter comments to save costs
 

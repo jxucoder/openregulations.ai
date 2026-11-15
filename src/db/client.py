@@ -4,7 +4,7 @@ Supabase database client for OpenRegulations.ai
 
 import os
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
 try:
     from supabase import Client, create_client
@@ -143,6 +143,26 @@ class SupabaseClient:
 
         result = query.order("posted_date", desc=True).range(offset, offset + limit - 1).execute()
         return [Comment.from_dict(c) for c in result.data]
+
+    def get_comment_ids(self, docket_id: str) -> Set[str]:
+        """Get the IDs of every stored comment for a docket (paginated past the row cap)."""
+        page_size = 1000  # Supabase returns at most 1000 rows per request
+        ids: Set[str] = set()
+        offset = 0
+
+        while True:
+            result = (
+                self.client.table("comments")
+                .select("id")
+                .eq("docket_id", docket_id)
+                .order("id")
+                .range(offset, offset + page_size - 1)
+                .execute()
+            )
+            ids.update(row["id"] for row in result.data)
+            if len(result.data) < page_size:
+                return ids
+            offset += page_size
 
     def get_comment_count(self, docket_id: str) -> int:
         """Get total comment count for a docket."""

@@ -7,6 +7,10 @@ No analysis, no embeddings, no Claude calls.
 Run:
     python -m src.jobs.sync
     python -m src.jobs.sync --docket-id NHTSA-2025-0491
+
+Bulk backfill from the Mirrulations S3 mirror (no API key, no rate limit):
+    python -m src.jobs.sync --docket-id NHTSA-2025-0491 --source mirrulations
+    python -m src.jobs.sync --backfill --source mirrulations
 """
 
 import os
@@ -15,11 +19,16 @@ import requests
 from datetime import datetime, timezone
 from typing import List, Optional, Set, Dict
 
+from src.jobs.mirrulations import MirrulationsClient
+
 # Load environment variables
 from dotenv import load_dotenv
 load_dotenv()
 
 from src.db import get_client, Docket, Comment
+
+# Comments written to the database per request during a Mirrulations backfill
+MIRRULATIONS_BATCH_SIZE = 500
 
 
 class RegulationsGovAPI:
@@ -169,8 +178,7 @@ def sync_docket(docket_id: str, max_new_comments: int = 1000) -> Dict:
         print(f"[SYNC] Found {len(api_ids)} comments on Regulations.gov")
         
         # 3. Get IDs we already have
-        result = db.client.table("comments").select("id").eq("docket_id", docket_id).execute()
-        existing_ids = {row["id"] for row in result.data}
+        existing_ids = db.get_comment_ids(docket_id)
         print(f"[SYNC] Already have {len(existing_ids)} in database")
         
         # 4. Find new IDs
@@ -225,6 +233,135 @@ def sync_docket(docket_id: str, max_new_comments: int = 1000) -> Dict:
         print(f"[SYNC] Error: {e}")
         db.log_sync_error(log_id, str(e))
         raise
+
+
+def backfill_docket_from_mirrulations(docket_id: str, max_new_comments: int = 10000) -> Dict:
+    """
+    Backfill a docket's missing comments from the Mirrulations S3 mirror.
+
+    Makes no Regulations.gov API calls, so it needs no API key and is not rate
+    limited. The mirror lags the live API: run the regular sync afterwards to
+    pick up the newest comments.
+
+    Args:
+        docket_id: Docket to backfill
+        max_new_comments: Max new comments to fetch per run
+
+    Returns:
+        Stats dict
+    """
+    mirror = MirrulationsClient()
+    db = get_client()
+
+    log_id = db.log_sync_start("mirrulations_backfill", docket_id)
+
+    try:
+        print(f"[MIRROR] Starting backfill for {docket_id}")
+
+        # 1. List what the mirror has
+        mirror_keys = mirror.list_comment_keys(docket_id)
+        print(f"[MIRROR] Found {len(mirror_keys)} comments on Mirrulations")
+
+        if not mirror_keys:
+            db.log_sync_complete(log_id, records_fetched=0, records_created=0)
+            return {
+                "docket_id": docket_id,
+                "status": "not_in_mirror",
+                "total_in_mirror": 0,
+                "newly_fetched": 0,
+            }
+
+        # 2. Comments reference their docket, so create it if we don't have it yet.
+        #    An existing row is left alone: the live API is fresher than the mirror.
+        if not db.get_docket(docket_id):
+            docket_data = mirror.get_docket(docket_id)
+            if not docket_data:
+                raise ValueError(f"Docket {docket_id} has comments but no docket file on Mirrulations")
+            db.upsert_docket(Docket.from_regulations_gov(docket_data))
+            print("[MIRROR] Created docket from mirror metadata")
+
+        # 3. Find comments we don't have
+        existing_ids = db.get_comment_ids(docket_id)
+        print(f"[MIRROR] Already have {len(existing_ids)} in database")
+
+        new_ids = sorted(set(mirror_keys) - existing_ids)
+        print(f"[MIRROR] Need to fetch {len(new_ids)} new comments")
+
+        if not new_ids:
+            db.log_sync_complete(log_id, records_fetched=0, records_created=0)
+            return {
+                "docket_id": docket_id,
+                "status": "up_to_date",
+                "total_in_mirror": len(mirror_keys),
+                "in_database": len(existing_ids),
+                "newly_fetched": 0,
+            }
+
+        # 4. Download and insert in batches, so an interrupted run keeps its progress
+        to_fetch = new_ids[:max_new_comments]
+        inserted = 0
+        batch: List[Comment] = []
+
+        def flush() -> None:
+            nonlocal inserted
+            inserted += db.upsert_comments(batch)
+            batch.clear()
+            print(f"[MIRROR] Progress: {inserted}/{len(to_fetch)}")
+
+        for detail in mirror.get_comments([mirror_keys[i] for i in to_fetch]):
+            batch.append(Comment.from_regulations_gov(detail, docket_id))
+            if len(batch) >= MIRRULATIONS_BATCH_SIZE:
+                flush()
+        if batch:
+            flush()
+
+        db.log_sync_complete(log_id, records_fetched=len(to_fetch), records_created=inserted)
+
+        return {
+            "docket_id": docket_id,
+            "status": "synced",
+            "total_in_mirror": len(mirror_keys),
+            "in_database": len(existing_ids) + inserted,
+            "newly_fetched": inserted,
+            "remaining": len(new_ids) - len(to_fetch),
+        }
+
+    except Exception as e:
+        print(f"[MIRROR] Error: {e}")
+        db.log_sync_error(log_id, str(e))
+        raise
+
+
+def run_mirrulations_backfill(max_comments_per_docket: int = 10000) -> List[Dict]:
+    """
+    Backfill every docket in the database from the Mirrulations S3 mirror.
+
+    Args:
+        max_comments_per_docket: Max new comments to fetch per docket per run
+
+    Returns:
+        List of results (only dockets that gained comments or failed)
+    """
+    db = get_client()
+
+    result = db.client.table("dockets").select("id").execute()
+    all_dockets = [row["id"] for row in result.data]
+    print(f"[MIRROR] Found {len(all_dockets)} dockets in database")
+
+    results = []
+    for docket_id in all_dockets:
+        print(f"\n[MIRROR] === {docket_id} ===")
+        try:
+            stats = backfill_docket_from_mirrulations(docket_id, max_comments_per_docket)
+            if stats["newly_fetched"]:
+                results.append(stats)
+        except Exception as e:
+            print(f"[MIRROR] Failed: {e}")
+            results.append({"docket_id": docket_id, "status": "error", "error": str(e)})
+
+    total_fetched = sum(r.get("newly_fetched", 0) for r in results)
+    print(f"\n[MIRROR] Complete. Fetched {total_fetched} new comments across {len(results)} dockets")
+    return results
 
 
 def run_sync(max_dockets: int = 10, max_comments_per_docket: int = 500) -> List[Dict]:
@@ -363,16 +500,37 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Sync from Regulations.gov")
     parser.add_argument("--docket-id", help="Sync specific docket")
     parser.add_argument("--backfill", action="store_true", help="Backfill all dockets with missing comments")
+    parser.add_argument(
+        "--source",
+        choices=["api", "mirrulations"],
+        default="api",
+        help="Where to fetch comments from. 'mirrulations' reads the public S3 mirror: "
+             "no API key or rate limit, but it lags the live API. Needs --docket-id or --backfill",
+    )
     parser.add_argument("--max-dockets", type=int, default=10)
-    parser.add_argument("--max-comments", type=int, default=500)
+    parser.add_argument(
+        "--max-comments", type=int, default=None,
+        help="Max new comments per docket (default: 500, or 10000 with --source mirrulations)",
+    )
     args = parser.parse_args()
 
-    if args.backfill:
-        results = run_backfill(args.max_comments)
+    from_mirror = args.source == "mirrulations"
+    if from_mirror and not (args.docket_id or args.backfill):
+        parser.error("--source mirrulations requires --docket-id or --backfill")
+    max_comments = args.max_comments or (10000 if from_mirror else 500)
+
+    if from_mirror and args.docket_id:
+        result = backfill_docket_from_mirrulations(args.docket_id, max_comments)
+        print(f"\nResult: {result}")
+    elif from_mirror:
+        results = run_mirrulations_backfill(max_comments)
+        print(f"\nBackfilled {len(results)} dockets")
+    elif args.backfill:
+        results = run_backfill(max_comments)
         print(f"\nBackfilled {len(results)} dockets")
     elif args.docket_id:
-        result = sync_docket(args.docket_id, args.max_comments)
+        result = sync_docket(args.docket_id, max_comments)
         print(f"\nResult: {result}")
     else:
-        results = run_sync(args.max_dockets, args.max_comments)
+        results = run_sync(args.max_dockets, max_comments)
         print(f"\nSynced {len(results)} dockets")
