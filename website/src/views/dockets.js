@@ -37,7 +37,7 @@ export async function docketsView(main) {
   main.innerHTML = `
     <section class="border-b border-ink-200 bg-white">
       <div class="container-page py-10 sm:py-12">
-        <h1 class="text-3xl font-black tracking-[-0.035em] text-ink-900 sm:text-5xl">Analyses</h1>
+        <h1 class="text-3xl font-semibold tracking-[-0.035em] text-ink-900 sm:text-5xl">Analyses</h1>
         <p class="mt-3 max-w-2xl text-ink-600">AI analyses of public comments, one per federal rulemaking docket.</p>
       </div>
     </section>

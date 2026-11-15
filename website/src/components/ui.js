@@ -59,7 +59,7 @@ export function reportRow(d, i = 0) {
         <span class="absolute inset-0 origin-left scale-x-0 bg-accent-600 transition-transform duration-300 ease-out group-hover:scale-x-100 group-focus-visible:scale-x-100" aria-hidden="true"></span>
         <span class="relative w-10 shrink-0 font-mono text-[13px] text-ink-400 group-hover:text-white/60">${String(i + 1).padStart(2, '0')}</span>
         <span class="relative w-20 shrink-0 font-mono text-[13px] font-bold text-accent-600 group-hover:text-campaign-400" title="${esc(agencyName(d.agency))}">${esc(d.agency)}</span>
-        <span class="relative min-w-0 flex-[999_1_20rem] text-xl font-extrabold leading-snug tracking-tight text-ink-900 group-hover:text-white sm:text-2xl">${esc(d.title)}</span>
+        <span class="relative min-w-0 flex-[999_1_20rem] text-xl font-semibold leading-snug tracking-tight text-ink-900 group-hover:text-white sm:text-2xl">${esc(d.title)}</span>
         <span class="relative flex shrink-0 items-center gap-3 font-mono text-[13px] text-ink-500 group-hover:text-white/80">${esc(fmtNum(d.total))} comments
           <span class="-translate-x-2 opacity-0 transition duration-300 group-hover:translate-x-0 group-hover:opacity-100" aria-hidden="true">${icons.arrowRight}</span>
         </span>
@@ -104,7 +104,7 @@ export function emptyState({ figure, title, body = '', action = '' }) {
   return `
     <div class="mx-auto flex max-w-md flex-col items-center px-4 py-10 text-center">
       <div class="fig-ink w-52" data-figure="${figure}"></div>
-      <p class="mt-2 text-lg font-extrabold text-ink-900">${title}</p>
+      <p class="mt-2 text-lg font-semibold text-ink-900">${title}</p>
       ${body ? `<p class="mt-1.5 text-sm leading-relaxed text-ink-600">${body}</p>` : ''}
       ${action}
     </div>`;

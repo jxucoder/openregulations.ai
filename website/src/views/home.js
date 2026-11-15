@@ -5,15 +5,24 @@ import { reportRow, icons, loadingBlock, errorBlock } from '../components/ui.js'
 
 const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+// Example searches that match real tracked dockets.
+const EXAMPLES = [
+  ['coal ash', 'coal'],
+  ['breeding dogs', 'dogs'],
+  ['polar bears', 'polar bears'],
+  ['ethylene oxide', 'ethylene oxide'],
+  ['Pell grants', 'pell'],
+];
+
 export async function homeView(main) {
   main.innerHTML = `
     <section class="field-grid relative isolate overflow-hidden bg-accent-600 text-white">
       <div class="relative mx-auto grid min-h-[calc(100svh-4rem)] w-full max-w-7xl items-center gap-12 px-4 py-14 sm:px-6 lg:grid-cols-[1.35fr_1fr] lg:px-8 lg:py-10">
-        <div>
+        <div class="min-w-0">
           <p class="rise font-mono text-sm text-white/75" style="--d:0ms">
             <span class="mr-2 inline-block h-2 w-2 animate-pulse bg-campaign-400 align-middle"></span>reading Regulations.gov
           </p>
-          <h1 class="mt-6 text-[clamp(3rem,6.4vw,6rem)] font-black leading-[0.92] tracking-[-0.055em]">
+          <h1 class="mt-6 text-[clamp(3rem,6.4vw,6rem)] font-semibold leading-[0.95] tracking-[-0.05em]">
             <span class="rise block" style="--d:80ms">AI analysis</span>
             <span class="rise block" style="--d:160ms">of public</span>
             <span class="rise block" style="--d:240ms">comments on</span>
@@ -22,9 +31,19 @@ export async function homeView(main) {
           <p class="rise mt-8 max-w-md text-lg leading-relaxed text-white/85 sm:text-xl" style="--d:420ms">
             What thousands of commenters told the agency, in a few minutes of reading.
           </p>
-          <a href="/dockets" class="rise group mt-9 inline-flex items-center gap-3 bg-white px-6 py-4 text-base font-extrabold text-ink-900 transition hover:bg-campaign-400" style="--d:500ms">
-            Browse analyses <span class="transition-transform group-hover:translate-x-1">${icons.arrowRight}</span>
-          </a>
+          <form id="hero-search" role="search" class="rise mt-9 max-w-xl" style="--d:500ms">
+            <label class="flex items-center bg-white text-ink-900 shadow-[0_20px_40px_-20px_rgba(4,8,50,0.6)] focus-within:ring-4 focus-within:ring-campaign-400">
+              <span class="sr-only">Search analyses</span>
+              <span class="pl-5 text-ink-400">${icons.search}</span>
+              <input id="hero-q" type="search" autocomplete="off" placeholder="Search a rule, agency, or docket ID"
+                class="min-w-0 flex-1 border-0 bg-transparent px-3 py-4 text-base text-ink-900 placeholder:text-ink-400 focus:outline-none focus:ring-0 sm:text-lg">
+              <button class="m-1.5 shrink-0 bg-ink-900 px-5 py-3 text-sm font-bold text-white transition hover:bg-accent-700">Search</button>
+            </label>
+            <div class="mt-4 flex flex-wrap items-center gap-2 text-sm">
+              <span class="font-mono text-xs text-white/60">try</span>
+              ${EXAMPLES.map(([label, q]) => `<a href="/dockets?q=${encodeURIComponent(q)}" class="border border-white/35 px-3 py-1.5 text-white/90 transition hover:border-white hover:bg-white hover:text-ink-900">${label}</a>`).join('')}
+            </div>
+          </form>
         </div>
 
         <div class="rise relative mx-auto w-full max-w-xl" style="--d:300ms">
@@ -50,7 +69,7 @@ export async function homeView(main) {
 
     <section class="container-page py-16 sm:py-20">
       <div class="flex items-end justify-between gap-4">
-        <h2 class="text-3xl font-black tracking-[-0.04em] text-ink-900 sm:text-5xl">Latest analyses</h2>
+        <h2 class="text-3xl font-semibold tracking-[-0.04em] text-ink-900 sm:text-5xl">Latest analyses</h2>
         <a href="/dockets" class="inline-flex items-center gap-1.5 pb-1 text-sm font-bold text-accent-700 hover:text-ink-900">All ${icons.arrowRight}</a>
       </div>
       <ol id="home-reports" class="mt-8 border-t-[3px] border-ink-900">
@@ -58,6 +77,14 @@ export async function homeView(main) {
       </ol>
     </section>
   `;
+
+  main.querySelector('#hero-search').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const q = main.querySelector('#hero-q').value.trim();
+    window.history.pushState({}, '', `/dockets${q ? `?q=${encodeURIComponent(q)}` : ''}`);
+    window.scrollTo(0, 0);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  });
 
   const list = main.querySelector('#home-reports');
   let dockets;

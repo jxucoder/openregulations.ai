@@ -193,7 +193,7 @@ export async function docketView(main, { id }) {
             <span class="text-ink-300" aria-hidden="true">·</span>
             <span class="font-mono text-xs text-ink-500">${esc(docket.id)}</span>
           </div>
-          <h1 class="mt-4 max-w-4xl text-3xl font-black leading-[1.05] tracking-[-0.035em] text-ink-900 sm:text-4xl lg:text-5xl">${esc(docket.title)}</h1>
+          <h1 class="mt-4 max-w-4xl text-3xl font-semibold leading-[1.05] tracking-[-0.035em] text-ink-900 sm:text-4xl lg:text-5xl">${esc(docket.title)}</h1>
           ${docket.abstract ? `<p class="mt-5 max-w-3xl text-lg leading-relaxed text-ink-600">${esc(docket.abstract)}</p>` : ''}
           <div class="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-ink-600">
             <span><span class="font-semibold text-ink-900">${esc(fmtNum(total))}</span> public comments</span>
