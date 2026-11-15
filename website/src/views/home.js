@@ -15,6 +15,7 @@ const EXAMPLES = [
 ];
 
 export async function homeView(main) {
+  const nav = main.dataset.nav;
   main.innerHTML = `
     <section class="field-grid relative isolate overflow-hidden bg-accent-600 text-white">
       <div class="relative mx-auto grid min-h-[calc(100svh-4rem)] w-full max-w-7xl items-center gap-12 px-4 py-14 sm:px-6 lg:grid-cols-[1.35fr_1fr] lg:px-8 lg:py-10">
@@ -91,9 +92,12 @@ export async function homeView(main) {
   try {
     dockets = await getDockets();
   } catch (err) {
+    if (main.dataset.nav !== nav) return;
     list.innerHTML = `<li class="py-6">${errorBlock(err.message)}</li>`;
     return;
   }
+  if (main.dataset.nav !== nav) return;
+
 
   const analyzed = dockets.filter((d) => d.hasReport);
   const latest = [...analyzed]
