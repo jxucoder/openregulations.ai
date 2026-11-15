@@ -25,6 +25,9 @@ def get_client() -> "SupabaseClient":
     return _client
 
 
+# Supabase returns at most this many rows per request (`max_rows`).
+PAGE_SIZE = 1000
+
 class SupabaseClient:
     """
     Supabase client wrapper with typed methods for OpenRegulations data.
@@ -131,18 +134,31 @@ class SupabaseClient:
         offset: int = 0,
         exclude_form_letters: bool = False
     ) -> List[Comment]:
-        """Get comments for a docket."""
-        query = (
-            self.client.table("comments")
-            .select("*")
-            .eq("docket_id", docket_id)
-        )
+        """
+        Get comments for a docket, newest first.
 
-        if exclude_form_letters:
-            query = query.eq("is_form_letter", False)
-
-        result = query.order("posted_date", desc=True).range(offset, offset + limit - 1).execute()
-        return [Comment.from_dict(c) for c in result.data]
+        Pages through results because the API returns at most PAGE_SIZE rows per request
+        (Supabase `max_rows`); a single request with a larger range silently truncates.
+        """
+        rows: list = []
+        start = offset
+        end = offset + limit
+        while start < end:
+            stop = min(start + PAGE_SIZE, end) - 1
+            query = self.client.table("comments").select("*").eq("docket_id", docket_id)
+            if exclude_form_letters:
+                query = query.eq("is_form_letter", False)
+            page = (
+                query.order("posted_date", desc=True)
+                .order("id")  # tie-breaker keeps pages stable
+                .range(start, stop)
+                .execute()
+            ).data
+            rows.extend(page)
+            if len(page) < stop - start + 1:
+                break
+            start = stop + 1
+        return [Comment.from_dict(c) for c in rows]
 
     def get_comment_count(self, docket_id: str) -> int:
         """Get total comment count for a docket."""

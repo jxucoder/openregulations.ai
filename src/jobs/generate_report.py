@@ -212,7 +212,7 @@ def generate_report(docket_id: str, sample_size: int = 300) -> Dict:
         if not docket:
             raise ValueError(f"Docket not found: {docket_id}")
 
-        comments = db.get_comments(docket_id, limit=10000)
+        comments = db.get_comments(docket_id, limit=LOAD_LIMIT)
         if not comments:
             raise ValueError(f"No comments found for {docket_id}")
 
@@ -285,6 +285,8 @@ def generate_report(docket_id: str, sample_size: int = 300) -> Dict:
         raise
 
 
+# Most comments a report loads; get_comments pages through them.
+LOAD_LIMIT = 10000
 # A report is regenerated once the stored comments grow this much beyond what it covered.
 REFRESH_GROWTH = 1.25
 # Dockets with fewer stored comments than this are not worth a report.
@@ -329,7 +331,8 @@ def dockets_needing_reports(db, max_dockets: int) -> List[str]:
     candidates = []
     for row in rows:
         did = row["id"]
-        stored = stored_comment_count(db, did)
+        # Compare like with like: a report never covers more than LOAD_LIMIT comments.
+        stored = min(stored_comment_count(db, did), LOAD_LIMIT)
         if stored < MIN_COMMENTS:
             continue
         if did not in covered:
