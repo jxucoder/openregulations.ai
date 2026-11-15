@@ -23,7 +23,7 @@
 
 @layer components {
   .container-page {
-    @apply mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8;
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
   }
 
   .eyebrow {
@@ -108,4 +108,60 @@
   .report blockquote cite::before {
     content: '— ';
   }
+}
+
+/* Home: motion and field texture */
+@layer components {
+  .field-grid {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+    background-size: 56px 56px;
+    background-position: -1px -1px;
+  }
+
+  .rise {
+    animation: rise 0.9s cubic-bezier(0.2, 0.7, 0.1, 1) both;
+    animation-delay: var(--d, 0ms);
+  }
+
+  .underline-sweep {
+    @apply absolute -bottom-1 left-0 h-[0.12em] w-full origin-left bg-campaign-400;
+    animation: sweep 0.8s cubic-bezier(0.5, 0, 0.1, 1) 0.9s both;
+  }
+
+  .caret {
+    @apply ml-0.5 inline-block h-[1.1em] w-[0.55em] translate-y-[0.2em] bg-campaign-400;
+    animation: blink 1s steps(1) infinite;
+  }
+
+  .ticker {
+    animation: ticker 60s linear infinite;
+  }
+
+  .ticker:hover {
+    animation-play-state: paused;
+  }
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(0.6em); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes sweep {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+@keyframes ticker {
+  to { transform: translateX(-50%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise, .underline-sweep, .ticker, .caret { animation: none; }
 }

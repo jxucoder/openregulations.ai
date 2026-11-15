@@ -4,9 +4,9 @@
  * .fig-ink / .fig-field classes in main.css.
  */
 
-import { sieve, loupe, query, drawer, plug } from '@lucasmarkes/hairline';
+import { sieve, terrain, loupe, query, drawer, plug } from '@lucasmarkes/hairline';
 
-const FIGURES = { sieve, loupe, query, drawer, plug };
+const FIGURES = { sieve, terrain, loupe, query, drawer, plug };
 let mounted = [];
 
 export function mountFigures(root) {

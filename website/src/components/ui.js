@@ -51,14 +51,18 @@ export function sentimentBar(s) {
     </div>`;
 }
 
-/** Row used on the home page for published analyses. */
-export function reportRow(d) {
+/** Row used on the home page for published analyses: fills with the field color on hover. */
+export function reportRow(d, i = 0) {
   return `
     <li class="border-b border-ink-200">
-      <a href="/docket/${encodeURIComponent(d.id)}" class="group flex flex-wrap items-baseline gap-x-8 gap-y-1 py-5">
-        <span class="w-20 shrink-0 font-mono text-[13px] font-bold text-accent-600" title="${esc(agencyName(d.agency))}">${esc(d.agency)}</span>
-        <span class="min-w-0 flex-[999_1_22rem] text-lg font-bold leading-snug tracking-tight text-ink-900 group-hover:text-accent-700">${esc(d.title)}</span>
-        <span class="shrink-0 font-mono text-[13px] text-ink-500">${esc(fmtNum(d.total))} comments</span>
+      <a href="/docket/${encodeURIComponent(d.id)}" class="group relative flex flex-wrap items-baseline gap-x-8 gap-y-1 overflow-hidden px-2 py-6 transition-colors duration-300 hover:text-white focus-visible:text-white sm:px-4">
+        <span class="absolute inset-0 origin-left scale-x-0 bg-accent-600 transition-transform duration-300 ease-out group-hover:scale-x-100 group-focus-visible:scale-x-100" aria-hidden="true"></span>
+        <span class="relative w-10 shrink-0 font-mono text-[13px] text-ink-400 group-hover:text-white/60">${String(i + 1).padStart(2, '0')}</span>
+        <span class="relative w-20 shrink-0 font-mono text-[13px] font-bold text-accent-600 group-hover:text-campaign-400" title="${esc(agencyName(d.agency))}">${esc(d.agency)}</span>
+        <span class="relative min-w-0 flex-[999_1_20rem] text-xl font-extrabold leading-snug tracking-tight text-ink-900 group-hover:text-white sm:text-2xl">${esc(d.title)}</span>
+        <span class="relative flex shrink-0 items-center gap-3 font-mono text-[13px] text-ink-500 group-hover:text-white/80">${esc(fmtNum(d.total))} comments
+          <span class="-translate-x-2 opacity-0 transition duration-300 group-hover:translate-x-0 group-hover:opacity-100" aria-hidden="true">${icons.arrowRight}</span>
+        </span>
       </a>
     </li>`;
 }
