@@ -1,114 +1,45 @@
 /**
- * API client for communicating with the Cloudflare Worker proxy
+ * Client for the Worker's AI endpoints (chat, rate-limit status).
  */
 
-// Configuration - update this URL after deploying the Cloudflare Worker
-const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://openregulations-proxy.workers.dev';
+const WORKER_URL = (import.meta.env.VITE_WORKER_URL || '').replace(/\/$/, '');
+
+export const chatAvailable = Boolean(WORKER_URL);
 
 /**
- * Send a chat message to the LLM via the proxy
- * @param {string} message - User message
- * @param {Array} context - Relevant context (documents, comments)
- * @param {object} options - Additional options (docket_id, etc.)
- * @returns {Promise<string>} LLM response
+ * Ask a question, optionally scoped to one docket.
+ * @param {string} message
+ * @param {{docketId?: string|null, history?: Array<{role: string, content: string}>}} [options]
+ * @returns {Promise<{response: string, sources: Array<Object>}>}
  */
-export async function sendChatMessage(message, context = [], options = {}) {
-  const response = await fetch(`${WORKER_URL}/chat`, {
+export async function sendChatMessage(message, { docketId = null, history = [] } = {}) {
+  const res = await fetch(`${WORKER_URL}/chat`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       message,
-      context,
-      docket_id: options.docket_id || null,
-      conversation_history: options.conversation_history || [],
+      docket_id: docketId,
+      conversation_history: history.slice(-6),
     }),
   });
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Unknown error' }));
-    throw new Error(error.error || `Request failed: ${response.status}`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    if (res.status === 429) throw new Error('You have reached the daily question limit. Please try again tomorrow.');
+    throw new Error(body.error || `Request failed (${res.status})`);
   }
 
-  const data = await response.json();
-  return data.response;
+  const data = await res.json();
+  return { response: data.response || '', sources: data.sources || [] };
 }
 
-/**
- * Send a chat message with streaming response
- * @param {string} message - User message
- * @param {Array} context - Relevant context
- * @param {Function} onChunk - Callback for each text chunk
- * @param {object} options - Additional options (docket_id, etc.)
- * @returns {Promise<void>}
- */
-export async function streamChatMessage(message, context = [], onChunk, options = {}) {
-  const response = await fetch(`${WORKER_URL}/chat/stream`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      message,
-      context,
-      docket_id: options.docket_id || null,
-    }),
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Unknown error' }));
-    throw new Error(error.error || `Request failed: ${response.status}`);
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    
-    const chunk = decoder.decode(value);
-    onChunk(chunk);
-  }
-}
-
-/**
- * Analyze a specific comment or set of comments
- * @param {string} query - Analysis query
- * @param {Array} comments - Comments to analyze
- * @returns {Promise<object>} Analysis result
- */
-export async function analyzeComments(query, comments) {
-  const response = await fetch(`${WORKER_URL}/analyze`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      query,
-      comments,
-    }),
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Unknown error' }));
-    throw new Error(error.error || `Request failed: ${response.status}`);
-  }
-
-  return response.json();
-}
-
-/**
- * Check the API status and rate limit
- * @returns {Promise<object>} Status object with remaining requests
- */
+/** @returns {Promise<{remaining: number, limit: number}|null>} */
 export async function checkStatus() {
-  const response = await fetch(`${WORKER_URL}/status`);
-  
-  if (!response.ok) {
-    throw new Error('Failed to check status');
+  if (!WORKER_URL) return null;
+  try {
+    const res = await fetch(`${WORKER_URL}/status`);
+    return res.ok ? res.json() : null;
+  } catch {
+    return null;
   }
-
-  return response.json();
 }

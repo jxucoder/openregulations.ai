@@ -15,6 +15,9 @@ const RATE_LIMIT = {
   MAX_REQUESTS_PER_MINUTE: 10,
 };
 
+// Public read endpoints: data changes at most a few times a day
+const PUBLIC_CACHE = { 'Cache-Control': 'public, max-age=300, s-maxage=900, stale-while-revalidate=3600' };
+
 // CORS headers
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -159,33 +162,41 @@ async function handleStatus(request, env) {
 async function handleDockets(request, env) {
   const [dockets, analyses, reports] = await Promise.all([
     supabaseQuery(env, 'dockets', {
-      select: 'id,title,agency,abstract,total_comments_at_sync,comment_end_date',
+      select: 'id,title,agency,total_comments_at_sync,comment_end_date,last_synced_at',
       filter: { total_comments_at_sync: 'gt.0' },
       order: 'total_comments_at_sync.desc.nullslast',
-      limit: '50',
+      limit: '500',
     }),
     supabaseQuery(env, 'analyses', {
-      select: 'docket_id,sentiment,total_comments',
+      select: 'docket_id,sentiment',
     }),
     supabaseQuery(env, 'reports', {
-      select: 'docket_id',
+      select: 'docket_id,generated_at,report_metadata',
     }),
   ]);
 
   // Index analyses and reports by docket_id
   const analysisMap = {};
   for (const a of analyses) analysisMap[a.docket_id] = a;
-  const reportSet = new Set(reports.map(r => r.docket_id));
+  const reportMap = {};
+  for (const r of reports) reportMap[r.docket_id] = r;
 
   // Merge into docket objects
-  const merged = dockets.map(d => ({
-    ...d,
-    total_comments: d.total_comments_at_sync || 0,
-    sentiment: analysisMap[d.docket_id]?.sentiment || null,
-    has_report: reportSet.has(d.id),
-  }));
+  const merged = dockets.map(d => {
+    const report = reportMap[d.id];
+    const meta = report?.report_metadata || {};
+    return {
+      ...d,
+      total_comments: d.total_comments_at_sync || 0,
+      sentiment: analysisMap[d.id]?.sentiment || null,
+      has_report: Boolean(report),
+      report_generated_at: report?.generated_at || null,
+      form_letter_pct: meta.form_letter_pct ?? null,
+      campaign_count: meta.campaign_count ?? null,
+    };
+  });
 
-  return jsonResponse({ dockets: merged });
+  return jsonResponse({ dockets: merged }, 200, PUBLIC_CACHE);
 }
 
 async function handleDocket(docketId, env) {
@@ -219,7 +230,7 @@ async function handleDocket(docketId, env) {
     docket: dockets[0],
     analysis: analyses[0] || null,
     report: reports[0] || null,
-  });
+  }, 200, PUBLIC_CACHE);
 }
 
 async function handleReport(docketId, env) {
@@ -236,7 +247,7 @@ async function handleReport(docketId, env) {
     return jsonResponse({ error: 'Report not found' }, 404);
   }
 
-  return jsonResponse({ report: reports[0] });
+  return jsonResponse({ report: reports[0] }, 200, PUBLIC_CACHE);
 }
 
 async function handleSearch(request, env) {
@@ -477,12 +488,13 @@ async function getRemainingRequests(ip, env) {
 
 // ============ Helpers ============
 
-function jsonResponse(data, status = 200) {
+function jsonResponse(data, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
       ...CORS_HEADERS,
       'Content-Type': 'application/json',
+      ...extraHeaders,
     },
   });
 }
