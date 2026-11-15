@@ -60,6 +60,8 @@ async function render({ focus = false } = {}) {
   const view = route ? route.view : notFoundView;
   const params = route?.params ? route.params(match) : {};
   setMeta(route === routes[0] ? {} : { title: '…' });
+  // Views compare this stamp after each await, so a slow view never paints over a newer page.
+  main.dataset.nav = String(token);
   const meta = await view(main, params);
   if (token !== navToken) return;
   setMeta(meta || (route === routes[1] ? { title: 'Analyses', description: 'AI analyses of public comments on federal rulemaking dockets.' } : {}));

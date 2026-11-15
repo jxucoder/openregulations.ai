@@ -55,7 +55,7 @@ cp .env.example .env
 source .venv/bin/activate
 
 # Analyze a docket
-python src/agents/comment_analyzer.py \
+python -m src.agents.comment_analyzer \
   --docket NHTSA-2025-0491 \
   --limit 100 \
   --output analysis.json

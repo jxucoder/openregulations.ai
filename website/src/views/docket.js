@@ -135,6 +135,7 @@ function pendingState(docket) {
 }
 
 export async function docketView(main, { id }) {
+  const nav = main.dataset.nav;
   main.innerHTML = `
     <div class="container-page py-12">
       <div class="max-w-3xl space-y-4">
@@ -151,10 +152,12 @@ export async function docketView(main, { id }) {
   try {
     data = await getDocket(id);
   } catch (err) {
+    if (main.dataset.nav !== nav) return null;
     main.innerHTML = `<div class="container-page py-16">${errorBlock(err.message)}</div>`;
     return { title: id };
   }
 
+  if (main.dataset.nav !== nav) return null;
   const { docket, analysis, report } = data;
   if (!docket) {
     main.innerHTML = `

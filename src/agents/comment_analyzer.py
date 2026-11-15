@@ -10,6 +10,8 @@ import os
 from dataclasses import dataclass, asdict
 from typing import Optional
 from anthropic import Anthropic
+
+from src.llm import complete, text_of
 import requests
 import time
 from collections import defaultdict
@@ -217,15 +219,11 @@ Return as JSON array:
 
 Only return the JSON, no other text."""
 
-        response = self.client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=2000,
-            messages=[{"role": "user", "content": prompt}]
-        )
+        response = complete(self.client, prompt, max_tokens=8000, effort="medium")
         
         try:
             # Extract JSON from response
-            text = response.content[0].text
+            text = text_of(response)
             # Find JSON array in response
             start = text.find('[')
             end = text.rfind(']') + 1
@@ -269,14 +267,10 @@ Return JSON only:
 Where N is percentage (should sum to 100). Support means they support the proposed change.
 Only return JSON."""
 
-        response = self.client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=200,
-            messages=[{"role": "user", "content": prompt}]
-        )
+        response = complete(self.client, prompt, max_tokens=4000, effort="medium")
         
         try:
-            text = response.content[0].text
+            text = text_of(response)
             start = text.find('{')
             end = text.rfind('}') + 1
             if start >= 0 and end > start:
@@ -309,13 +303,9 @@ Top themes: {[t['name'] for t in analysis['themes'][:3]]}
 
 Write as if briefing a busy executive. Focus on key insight."""
 
-        response = self.client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=300,
-            messages=[{"role": "user", "content": prompt}]
-        )
+        response = complete(self.client, prompt, max_tokens=4000, effort="medium")
         
-        return response.content[0].text
+        return text_of(response)
 
 
 # ============================================================================

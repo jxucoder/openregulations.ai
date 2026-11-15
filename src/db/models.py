@@ -231,7 +231,7 @@ class Analysis:
     # Metadata
     analyzed_at: Optional[datetime] = None
     analysis_version: str = "1.0"
-    model_used: str = "claude-sonnet-4-20250514"
+    model_used: str = "claude-sonnet-5-5"
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -285,7 +285,7 @@ class Report:
 
     # Metadata
     report_metadata: Optional[Dict] = None   # {total_comments, form_letter_pct, sample_size, input_tokens, output_tokens}
-    model_used: str = "claude-sonnet-4-20250514"
+    model_used: str = "claude-sonnet-5-5"
     generated_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

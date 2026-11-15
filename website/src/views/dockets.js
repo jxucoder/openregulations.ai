@@ -32,6 +32,7 @@ function writeState(state) {
 }
 
 export async function docketsView(main) {
+  const nav = main.dataset.nav;
   const state = readState();
 
   main.innerHTML = `
@@ -81,10 +82,13 @@ export async function docketsView(main) {
   try {
     dockets = await getDockets();
   } catch (err) {
+    if (main.dataset.nav !== nav) return;
     main.querySelector('#docket-list').innerHTML = `<li class="p-5">${errorBlock(err.message)}</li>`;
     main.querySelector('#result-count').textContent = '';
     return;
   }
+  if (main.dataset.nav !== nav) return;
+
 
   const counts = {};
   for (const d of dockets) counts[d.agency] = (counts[d.agency] || 0) + 1;

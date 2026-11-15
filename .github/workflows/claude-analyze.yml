@@ -73,4 +73,4 @@ jobs:
 
             Create one GitHub Issue per docket with a full analysis report.
             Use the gh CLI to create issues (it's pre-installed).
-          claude_args: "--max-turns 15 --model claude-sonnet-4-20250514"
+          claude_args: "--max-turns 15 --model claude-sonnet-5-5"
