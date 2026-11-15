@@ -1,53 +1,67 @@
+import typography from '@tailwindcss/typography';
+
 /** @type {import('tailwindcss').Config} */
 export default {
-  content: [
-    './index.html',
-    './src/**/*.{js,ts,jsx,tsx}',
-  ],
+  content: ['./index.html', './src/**/*.js'],
   theme: {
     extend: {
-      // Regulations theme colors
       colors: {
-        navy: {
-          50: '#f0f4f8',
-          100: '#d9e2ec',
-          200: '#bcccdc',
-          300: '#9fb3c8',
-          400: '#829ab1',
-          500: '#627d98',
-          600: '#486581',
-          700: '#334e68',
-          800: '#243b53',
-          900: '#1a365d',
-          950: '#102a43',
+        ink: {
+          DEFAULT: '#0e1a2b',
+          900: '#0e1a2b',
+          800: '#1b2940',
+          700: '#2e3d55',
+          600: '#48566e',
+          500: '#647189',
+          400: '#8b96aa',
+          300: '#b7bfcc',
+          200: '#d8dde5',
+          100: '#eaedf1',
+          50: '#f4f5f7',
         },
-        cream: {
-          50: '#fdfcfb',
-          100: '#faf8f5',
-          200: '#f5f1eb',
-          300: '#ede7dc',
-          400: '#e2d8c8',
+        paper: {
+          DEFAULT: '#fbfaf7',
+          100: '#f5f3ed',
+          200: '#ebe7dc',
         },
-        slate: {
-          350: '#b0bac5',
+        accent: {
+          50: '#eef3ff',
+          100: '#dbe4fe',
+          200: '#b9cbfc',
+          500: '#3563e9',
+          600: '#1f4fd1',
+          700: '#1a41ab',
+          800: '#173785',
+        },
+        campaign: {
+          100: '#fdecc8',
+          400: '#f0a43a',
+          500: '#d98a1c',
+          700: '#94570b',
         },
       },
-      // Typography
       fontFamily: {
-        serif: ['Merriweather', 'Georgia', 'serif'],
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        serif: ['"Source Serif 4"', 'Georgia', 'Cambria', 'serif'],
+        sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
       },
-      // Document-like styling
-      boxShadow: {
-        'document': '0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06)',
-        'document-lg': '0 4px 6px rgba(0, 0, 0, 0.07), 0 2px 4px rgba(0, 0, 0, 0.06)',
-      },
-      borderRadius: {
-        'document': '2px',
-      },
+      typography: ({ theme }) => ({
+        report: {
+          css: {
+            '--tw-prose-body': theme('colors.ink.700'),
+            '--tw-prose-headings': theme('colors.ink.900'),
+            '--tw-prose-lead': theme('colors.ink.600'),
+            '--tw-prose-links': theme('colors.accent.700'),
+            '--tw-prose-bold': theme('colors.ink.900'),
+            '--tw-prose-counters': theme('colors.ink.500'),
+            '--tw-prose-bullets': theme('colors.ink.300'),
+            '--tw-prose-hr': theme('colors.ink.100'),
+            '--tw-prose-quotes': theme('colors.ink.800'),
+            '--tw-prose-quote-borders': theme('colors.campaign.400'),
+            '--tw-prose-captions': theme('colors.ink.500'),
+          },
+        },
+      }),
     },
   },
-  plugins: [
-    require('@tailwindcss/typography'),
-  ],
+  plugins: [typography],
 };
