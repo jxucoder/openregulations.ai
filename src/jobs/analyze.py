@@ -25,6 +25,7 @@ except ImportError:
     anthropic = None
 
 from src.db import get_client, Comment, Analysis
+from src.llm import complete, text_of
 
 
 def get_claude_client():
@@ -200,12 +201,9 @@ def extract_themes(client, docket_id: str, comments: List[str]) -> List[Dict]:
     sample = comments[:100]
     comments_text = "\n---\n".join(sample)
     
-    response = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=2000,
-        messages=[{
-            "role": "user",
-            "content": f"""Analyze these public comments on federal regulation {docket_id}.
+    response = complete(
+        client,
+        f"""Analyze these public comments on federal regulation {docket_id}.
 
 Extract the main THEMES (distinct arguments/concerns being raised).
 
@@ -224,12 +222,13 @@ Return JSON array of themes:
   }}
 ]
 
-Return ONLY valid JSON, no other text."""
-        }]
+Return ONLY valid JSON, no other text.""",
+        max_tokens=8000,
+        effort="medium",
     )
     
     # Parse JSON from response
-    text = response.content[0].text
+    text = text_of(response)
     try:
         start = text.find("[")
         end = text.rfind("]") + 1
@@ -250,12 +249,9 @@ def classify_sentiment(client, comments: List[str]) -> Dict:
     sample = comments[:50]
     comments_text = "\n---\n".join(sample)
     
-    response = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=500,
-        messages=[{
-            "role": "user",
-            "content": f"""Classify the overall sentiment of these public comments on a federal regulation.
+    response = complete(
+        client,
+        f"""Classify the overall sentiment of these public comments on a federal regulation.
 
 Comments:
 {comments_text}
@@ -263,11 +259,12 @@ Comments:
 What percentage oppose, support, or are neutral toward the regulation?
 
 Return ONLY JSON: {{"oppose": N, "support": N, "neutral": N}}
-Numbers should sum to 100."""
-        }]
+Numbers should sum to 100.""",
+        max_tokens=4000,
+        effort="medium",
     )
     
-    text = response.content[0].text
+    text = text_of(response)
     try:
         start = text.find("{")
         end = text.rfind("}") + 1
@@ -292,12 +289,9 @@ def find_notable_comments(client, comments: List[Comment]) -> List[Dict]:
         if c.text
     ])
     
-    response = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=1500,
-        messages=[{
-            "role": "user",
-            "content": f"""Review these public comments and identify the most NOTABLE ones.
+    response = complete(
+        client,
+        f"""Review these public comments and identify the most NOTABLE ones.
 
 Notable = substantive, well-reasoned, cites evidence, expert perspective, or unique insight.
 
@@ -316,11 +310,12 @@ Return JSON array of top 5 notable comments:
   }}
 ]
 
-Return ONLY valid JSON."""
-        }]
+Return ONLY valid JSON.""",
+        max_tokens=6000,
+        effort="medium",
     )
     
-    text = response.content[0].text
+    text = text_of(response)
     try:
         start = text.find("[")
         end = text.rfind("]") + 1
@@ -351,12 +346,9 @@ def generate_summary(
         for c in campaigns[:3]
     ])
     
-    response = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=1000,
-        messages=[{
-            "role": "user",
-            "content": f"""Write a brief executive summary of public comments on {docket_id}.
+    response = complete(
+        client,
+        f"""Write a brief executive summary of public comments on {docket_id}.
 
 Sentiment: {sentiment.get('oppose', 0)}% oppose, {sentiment.get('support', 0)}% support, {sentiment.get('neutral', 0)}% neutral
 
@@ -371,11 +363,12 @@ Write 2-3 paragraphs summarizing:
 2. Key concerns/arguments
 3. Notable patterns (campaigns, who's commenting)
 
-Be factual and balanced."""
-        }]
+Be factual and balanced.""",
+        max_tokens=4000,
+        effort="medium",
     )
     
-    return response.content[0].text
+    return text_of(response)
 
 
 def run_analysis(max_dockets: int = 3) -> List[Dict]:

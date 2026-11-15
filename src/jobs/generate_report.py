@@ -23,6 +23,7 @@ except ImportError:
     anthropic = None
 
 from src.db import Comment, Report, get_client
+from src.llm import MODEL, complete, text_of
 
 
 def get_claude_client():
@@ -240,13 +241,12 @@ def generate_report(docket_id: str, sample_size: int = 300) -> Dict:
         )
 
         print(f"[REPORT] Calling Claude (prompt ~{len(prompt)} chars)...")
-        response = claude.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=8000,
-            messages=[{"role": "user", "content": prompt}],
-        )
+        # Thinking counts toward max_tokens, so leave room beyond the report itself.
+        response = complete(claude, prompt, max_tokens=16000)
 
-        report_html = response.content[0].text
+        report_html = text_of(response)
+        if not report_html.strip():
+            raise ValueError(f"Empty report (stop_reason={response.stop_reason})")
         input_tokens = response.usage.input_tokens
         output_tokens = response.usage.output_tokens
 
@@ -268,7 +268,7 @@ def generate_report(docket_id: str, sample_size: int = 300) -> Dict:
                 "input_tokens": input_tokens,
                 "output_tokens": output_tokens,
             },
-            model_used="claude-sonnet-4-20250514",
+            model_used=MODEL,
             generated_at=datetime.now(timezone.utc),
         )
 
@@ -285,36 +285,73 @@ def generate_report(docket_id: str, sample_size: int = 300) -> Dict:
         raise
 
 
+# A report is regenerated once the stored comments grow this much beyond what it covered.
+REFRESH_GROWTH = 1.25
+# Dockets with fewer stored comments than this are not worth a report.
+MIN_COMMENTS = 10
+# How many of the most-commented dockets to consider each run.
+CANDIDATE_POOL = 100
+
+
+def stored_comment_count(db, docket_id: str) -> int:
+    """Number of comments we actually hold for a docket (not the Regulations.gov total)."""
+    result = (
+        db.client.table("comments")
+        .select("id", count="exact")
+        .eq("docket_id", docket_id)
+        .limit(1)
+        .execute()
+    )
+    return result.count or 0
+
+
+def dockets_needing_reports(db, max_dockets: int) -> List[str]:
+    """
+    Pick dockets to (re)generate, most stored comments first.
+
+    A docket qualifies when we hold at least MIN_COMMENTS of its comments and it either
+    has no report or its report covered noticeably fewer comments than we hold now.
+    """
+    rows = (
+        db.client.table("dockets")
+        .select("id, total_comments_at_sync")
+        .gt("total_comments_at_sync", 0)
+        .order("total_comments_at_sync", desc=True)
+        .limit(CANDIDATE_POOL)
+        .execute()
+    ).data or []
+
+    reports = db.client.table("reports").select("docket_id, report_metadata").execute().data or []
+    covered = {
+        r["docket_id"]: (r.get("report_metadata") or {}).get("total_comments", 0) for r in reports
+    }
+
+    candidates = []
+    for row in rows:
+        did = row["id"]
+        stored = stored_comment_count(db, did)
+        if stored < MIN_COMMENTS:
+            continue
+        if did not in covered:
+            candidates.append((stored, did, "new"))
+        elif stored >= covered[did] * REFRESH_GROWTH:
+            candidates.append((stored, did, f"refresh {covered[did]} -> {stored}"))
+
+    candidates.sort(reverse=True)
+    for stored, did, why in candidates[:max_dockets]:
+        print(f"[REPORT] {did}: {stored} stored comments ({why})")
+    return [did for _, did, _ in candidates[:max_dockets]]
+
+
 def run_all_reports(max_dockets: int = 5, sample_size: int = 300) -> List[Dict]:
-    """Generate reports for dockets that need them."""
+    """Generate reports for dockets that need a new or refreshed one."""
     db = get_client()
 
     print("[REPORT] Finding dockets to generate reports for...")
-
-    # Get dockets with comments, ordered by comment count
-    # Prefer dockets without existing reports
-    result = db.client.table("dockets").select(
-        "id, total_comments_at_sync"
-    ).order(
-        "total_comments_at_sync", desc=True
-    ).limit(max_dockets * 2).execute()
-
-    if not result.data:
-        print("[REPORT] No dockets found")
-        return []
-
-    # Filter to those without reports (or with stale reports)
-    docket_ids = []
-    for row in result.data:
-        did = row["id"]
-        existing = db.get_report(did)
-        if not existing:
-            docket_ids.append(did)
-        if len(docket_ids) >= max_dockets:
-            break
+    docket_ids = dockets_needing_reports(db, max_dockets)
 
     if not docket_ids:
-        print("[REPORT] All dockets already have reports")
+        print("[REPORT] No docket needs a new or refreshed report")
         return []
 
     print(f"[REPORT] Will generate reports for {len(docket_ids)} dockets")
@@ -323,7 +360,7 @@ def run_all_reports(max_dockets: int = 5, sample_size: int = 300) -> List[Dict]:
     for docket_id in docket_ids:
         print(f"\n[REPORT] === {docket_id} ===")
         try:
-            result = generate_report(docket_id, sample_size)
+            generate_report(docket_id, sample_size)
             results.append({"docket_id": docket_id, "status": "success"})
         except Exception as e:
             print(f"[REPORT] Failed: {e}")

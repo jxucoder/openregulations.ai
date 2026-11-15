@@ -335,10 +335,16 @@ async function handleChat(request, env) {
       'Content-Type': 'application/json',
       'x-api-key': env.ANTHROPIC_API_KEY,
       'anthropic-version': '2023-06-01',
+      // On a safety refusal, the API re-runs the request on a fallback model it picks.
+      'anthropic-beta': 'server-side-fallback-2026-07-01',
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1500,
+      // claude-sonnet-4-20250514 was retired on 2026-06-15.
+      model: 'claude-sonnet-5-5',
+      // Thinking counts toward max_tokens; low effort keeps chat replies quick.
+      max_tokens: 4000,
+      output_config: { effort: 'low' },
+      fallbacks: 'default',
       system: systemPrompt,
       messages,
     }),
@@ -353,8 +359,18 @@ async function handleChat(request, env) {
   const data = await response.json();
   await incrementRateLimit(ip, env);
 
+  if (data.stop_reason === 'refusal') {
+    return jsonResponse({ error: 'The AI declined to answer this question.' }, 422);
+  }
+
+  // Responses can lead with thinking blocks; join only the text blocks.
+  const answer = (data.content || [])
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text)
+    .join('');
+
   return jsonResponse({
-    response: data.content[0]?.text || 'No response',
+    response: answer || 'No response',
     sources: relevantComments.slice(0, 3).map(c => ({
       id: c.comment_id,
       text: (c.comment_text || c.text || '').slice(0, 200) + '...',

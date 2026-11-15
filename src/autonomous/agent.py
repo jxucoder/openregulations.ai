@@ -434,7 +434,7 @@ class AutonomousAgent:
 
             # Call Claude
             response = self.client.messages.create(
-                model=self.config.model.get("name", "claude-sonnet-4-20250514"),
+                model=self.config.model.get("name", "claude-sonnet-5-5"),
                 max_tokens=self.config.model.get("max_tokens", 4096),
                 system=self.config.system_prompt,
                 tools=TOOL_DEFINITIONS,

@@ -45,7 +45,7 @@ jobs:
           REGULATIONS_API_KEY: ${{ secrets.REGULATIONS_API_KEY }}
         run: |
           source .venv/bin/activate
-          python src/agents/comment_analyzer.py \
+          python -m src.agents.comment_analyzer \
             --docket ${{ github.event.inputs.docket_id || 'NHTSA-2025-0491' }} \
             --limit ${{ github.event.inputs.limit || '100' }} \
             --output analysis-${{ github.run_id }}.json
