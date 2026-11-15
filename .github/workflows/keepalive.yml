@@ -26,9 +26,8 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           for wf in sync.yml generate-reports.yml analyze.yml claude-analyze.yml keepalive.yml; do
-            state=$(gh workflow view "$wf" --json state --jq .state 2>/dev/null || echo missing)
-            echo "$wf: $state"
-            if [ "$state" != "missing" ]; then
-              gh workflow enable "$wf" && echo "  enabled"
-            fi
+            before=$(gh api "repos/$GH_REPO/actions/workflows/$wf" --jq .state)
+            gh api -X PUT "repos/$GH_REPO/actions/workflows/$wf/enable"
+            after=$(gh api "repos/$GH_REPO/actions/workflows/$wf" --jq .state)
+            echo "$wf: $before -> $after"
           done
